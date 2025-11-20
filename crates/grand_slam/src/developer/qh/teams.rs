@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use plist::{Date, Integer, Value};
 
-use errors::Error;
+use crate::Error;
 
 use crate::{SessionRequestTrait, developer_endpoint};
 use super::{DeveloperSession, ResponseMeta};
@@ -34,7 +34,7 @@ pub struct Team {
     pub name: String,
     pub team_id: String,
     #[serde(rename = "type")]
-    pub team_type: String,
+    pub _type: String,
     team_agent: Option<TeamMember>,
     memberships: Vec<Membership>,
     current_team_member: TeamMember,
