@@ -3,15 +3,15 @@ use tokio::sync::{
     mpsc, 
     mpsc::error::TryRecvError
 };
-use std::sync::mpsc as std_mpsc;
+use std::{fs, path::PathBuf, sync::mpsc as std_mpsc};
 use plume_core::auth::Account;
 use plume_utils::{
     SignerOptions, 
     Package, 
     Device
 };
+use plume_shared::AccountCredentials;
 use crate::frame::PlumeFrame;
-use crate::keychain::AccountCredentials;
 
 #[derive(Debug)]
 pub enum PlumeFrameMessage {
@@ -21,11 +21,13 @@ pub enum PlumeFrameMessage {
     PackageDeselected,
     AccountLogin(Account),
     AccountDeleted,
+    InstallButtonStateChanged,
     AwaitingTwoFactorCode(std_mpsc::Sender<Result<String, String>>),
     RequestTeamSelection(Vec<String>, std_mpsc::Sender<Result<i32, String>>),
     WorkStarted,
     WorkUpdated(String),
     WorkEnded,
+    ArchivePathReady(PathBuf),
     Error(String),
 }
 
@@ -100,7 +102,7 @@ impl PlumeFrameMessageHandler {
                     }
                 }
                 
-                self.plume_frame.install_page.install_button.enable(true);
+                self.handle_message(PlumeFrameMessage::InstallButtonStateChanged);
             }
             PlumeFrameMessage::DeviceDisconnected(device_id) => {
                 if let Some(index) = self
@@ -113,9 +115,7 @@ impl PlumeFrameMessageHandler {
                     self.usbmuxd_picker_reconcile_selection();
                 }
                 
-                if self.usbmuxd_device_list.is_empty() {
-                    self.plume_frame.install_page.install_button.enable(false);
-                }
+                self.handle_message(PlumeFrameMessage::InstallButtonStateChanged);
             }
             PlumeFrameMessage::PackageSelected(package) => {
                 if self.package_selected.is_some() {
@@ -147,6 +147,7 @@ impl PlumeFrameMessageHandler {
                 self.signer_settings = SignerOptions::default();
                 self.plume_frame.install_page.set_settings(&self.signer_settings, None);
                 self.plume_frame.add_ipa_button.enable(true);
+                self.handle_message(PlumeFrameMessage::InstallButtonStateChanged);
             }
             PlumeFrameMessage::AccountLogin(account) => {
                 let (first, last) = account.get_name();
@@ -176,6 +177,18 @@ impl PlumeFrameMessageHandler {
                 
                 self.account_credentials = None;
                 self.plume_frame.settings_dialog.set_account_name(None);
+            }
+            PlumeFrameMessage::InstallButtonStateChanged => {
+                let export = self.plume_frame.install_page.install_choice.get_selection() == Some(0);
+                let should_enable = !self.usbmuxd_device_list.is_empty() || export;
+
+                if export {
+                    self.plume_frame.install_page.install_button.set_label("Export");
+                } else {
+                    self.plume_frame.install_page.install_button.set_label("Install");
+                }
+
+                self.plume_frame.install_page.install_button.enable(should_enable);
             }
             PlumeFrameMessage::AwaitingTwoFactorCode(tx) => {
                 let result = self.plume_frame.create_single_field_dialog(
@@ -210,6 +223,22 @@ impl PlumeFrameMessageHandler {
             PlumeFrameMessage::WorkEnded => {
                 self.plume_frame.work_page.set_status_text("Done.");
                 self.plume_frame.work_page.enable_back_button(true);
+            }
+            PlumeFrameMessage::ArchivePathReady(archive_path) => {
+                let dialog = FileDialog::builder(&self.plume_frame.frame)
+                    .with_message("Choose where to save the exported IPA")
+                    .with_style(FileDialogStyle::Save)
+                    .with_default_file("exported.ipa")
+                    .with_wildcard(
+                        "IPA files (*.ipa)|*.ipa"
+                    )
+                    .build();
+
+                if dialog.show_modal() == wxdragon::id::ID_OK {
+                    if let Some(path) = dialog.get_path() {
+                        fs::copy(&archive_path, &path).ok();
+                    }
+                }
             }
             PlumeFrameMessage::Error(error_msg) => {
                 let dialog = MessageDialog::builder(&self.plume_frame.frame, &error_msg, "Error")

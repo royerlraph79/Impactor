@@ -10,7 +10,7 @@ use crate::auth::account::request::RequestType;
 pub use apple_codesign::{SigningSettings, SettingsScope, UnifiedSigner, AppleCodesignError};
 pub use omnisette::AnisetteConfiguration;
 
-pub use utils::MachO;
+pub use utils::{MachO, MachOExt};
 pub use utils::MobileProvision;
 pub use utils::CertificateIdentity;
 
@@ -53,6 +53,8 @@ pub enum Error {
     Plist(#[from] plist::Error),
     #[error("Codesign error: {0}")]
     Codesign(#[from] apple_codesign::AppleCodesignError),
+    #[error("CodeSignBuilder error: {0}")]
+    CodeSignBuilder(#[from] apple_codesign::UniversalMachOError),
     #[error("Certificate PEM error: {0}")]
     Pem(#[from] pem::PemError),
     #[error("X509 certificate error: {0}")]

@@ -13,6 +13,10 @@ pub struct SignerOptions {
     pub embedding: SignerEmbedding,
     /// Mode.
     pub mode: SignerMode,
+    /// Installation mode.
+    pub install_mode: SignerInstallMode,
+    /// Tweaks to apply before signing.
+    pub tweaks: Option<Vec<std::path::PathBuf>>,
     /// App type.
     pub app: SignerApp,
 }
@@ -26,6 +30,8 @@ impl Default for SignerOptions {
             features: SignerFeatures::default(),
             embedding: SignerEmbedding::default(),
             mode: SignerMode::default(),
+            install_mode: SignerInstallMode::default(),
+            tweaks: None,
             app: SignerApp::Default,
         }
     }
@@ -67,17 +73,28 @@ pub struct SignerEmbedding {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignerInstallMode {
+    Install,
+    InstallMac,
+    Export,
+}
+
+impl Default for SignerInstallMode {
+    fn default() -> Self {
+        SignerInstallMode::Export
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignerMode {
-    Install, // Direct Install
-    SignAndInstall, // Standard Sideloading
-    SignAndInstallMacOS, // Apple Silicon Sideloading
-    AdhocSignAndInstall, // AppSync
-    Export, // Modify & Export
+    Pem,
+    Adhoc,
+    None,
 }
 
 impl Default for SignerMode {
     fn default() -> Self {
-        SignerMode::SignAndInstall
+        SignerMode::Adhoc
     }
 }
 

@@ -14,16 +14,15 @@ use idevice::{
     usbmuxd::{UsbmuxdConnection, UsbmuxdListenEvent},
 };
 
-use plume_utils::{Device, Package, PlistInfoTrait, Signer, SignerMode, get_device_for_id};
+use plume_shared::{AccountCredentials, get_data_path};
+use plume_utils::{Device, Package, Signer, SignerInstallMode, SignerMode, get_device_for_id};
 
 use wxdragon::prelude::*;
 use futures::StreamExt;
 use tokio::{runtime::Builder, sync::mpsc};
 
 use crate::{
-    get_data_path,
     handlers::{PlumeFrameMessage, PlumeFrameMessageHandler},
-    keychain::AccountCredentials,
     pages::{
         DefaultPage, InstallPage, LoginDialog, SettingsDialog, WINDOW_SIZE, WorkPage, create_default_page, create_install_page, create_login_dialog, create_settings_dialog, create_work_page
     },
@@ -174,7 +173,7 @@ impl PlumeFrame {
 
                 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
                 {
-                    if let Some(mac_udid) = crate::get_mac_udid() {
+                    if let Some(mac_udid) = gestalt::get_udid() {
                         sender.send(PlumeFrameMessage::DeviceConnected(Device { name: "This Mac".into(), udid: mac_udid, device_id: u32::MAX, usbmuxd_device: None })).ok();
                     }
                 }
@@ -348,28 +347,36 @@ impl PlumeFrame {
             let sender = sender.clone();
             move || {
                 let binding = message_handler.borrow();
-
-                let Some(selected_device) = binding.usbmuxd_selected_device_id.as_deref() else {
-                    sender.send(PlumeFrameMessage::Error("No device selected for installation.".to_string())).ok();
-                    return;
-                };
                 
                 let Some(selected_package) = binding.package_selected.as_ref() else {
                     sender.send(PlumeFrameMessage::Error("No package selected for installation.".to_string())).ok();
-                    return;
-                };
-
-                let Some(selected_account) = binding.account_credentials.as_ref() else {
-                    sender.send(PlumeFrameMessage::Error("No Apple ID account available for installation.".to_string())).ok();
                     return;
                 };
                 
                 let mut signer_settings = binding.signer_settings.clone();
                 binding.plume_frame.install_page.update_fields(&mut signer_settings);
 
+                let selected_device = if signer_settings.install_mode == SignerInstallMode::Export {
+                    None
+                } else {
+                    let Some(device_id) = binding.usbmuxd_selected_device_id.as_deref() else {
+                        sender.send(PlumeFrameMessage::Error("No device selected for installation.".to_string())).ok();
+                        return;
+                    };
+                    Some(device_id.to_string())
+                };
+
+                let selected_account = if signer_settings.mode == SignerMode::Pem {
+                    let Some(account) = binding.account_credentials.as_ref() else {
+                        sender.send(PlumeFrameMessage::Error("No Apple ID account available for installation.".to_string())).ok();
+                        return;
+                    };
+                    Some(account.clone())
+                } else {
+                    None
+                };
+
                 let package = selected_package.clone();
-                let account = selected_account.clone();
-                let device_id = selected_device.to_string();
                 let sender_clone = sender.clone();
 
                 thread::spawn(move || {
@@ -378,131 +385,186 @@ impl PlumeFrame {
                     let install_result = rt.block_on(async {
                         sender_clone.send(PlumeFrameMessage::WorkStarted).ok();
 
-                        let session = DeveloperSession::with(account.clone());
+                        let device = if let Some(device_id) = selected_device {
+                            if device_id == u32::MAX.to_string() {
+                                signer_settings.install_mode = SignerInstallMode::InstallMac;
 
-                        sender_clone.send(PlumeFrameMessage::WorkUpdated("Ensuring current device is registered...".to_string())).ok();
-
-                        let device = if device_id == u32::MAX.to_string() {
-                            signer_settings.mode = SignerMode::SignAndInstallMacOS;
-                            
-                            #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-                            {
-                                let mac_udid = crate::get_mac_udid()
-                                    .ok_or_else(|| "Failed to get Mac UDID".to_string())?;
-                                Device { 
-                                    name: "This Mac".into(), 
-                                    udid: mac_udid, 
-                                    device_id: u32::MAX, 
-                                    usbmuxd_device: None 
+                                if signer_settings.mode == SignerMode::Adhoc {
+                                    return Err("Ad-hoc signing is not supported for Mac installations.".to_string());
                                 }
-                            }
-                            #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-                            {
-                                return Err("Mac installation not supported on this platform".to_string());
+                                
+                                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                                {
+                                    let mac_udid = gestalt::get_udid()
+                                        .ok_or_else(|| "Failed to get Mac UDID".to_string())?;
+                                    Some(Device { 
+                                        name: "This Mac".into(), 
+                                        udid: mac_udid, 
+                                        device_id: u32::MAX, 
+                                        usbmuxd_device: None 
+                                    })
+                                }
+                                #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+                                {
+                                    return Err("Mac installation not supported on this platform".to_string());
+                                }
+                            } else {
+                                Some(get_device_for_id(&device_id).await.map_err(|_| "Selected device not found".to_string())?)
                             }
                         } else {
-                            get_device_for_id(&device_id).await.map_err(|_| "Selected device not found".to_string())?
-                        };
-                        
-                        let teams = session.qh_list_teams()
-                            .await
-                            .map_err(|e| format!("Failed to list teams: {}", e))?.teams;
-                        
-                        if teams.is_empty() {
-                            return Err("No teams available for the Apple ID account.".to_string());
-                        }
-                        
-                        let team_id = if teams.len() == 1 {
-                            &teams[0].team_id
-                        } else {
-                            let team_names: Vec<String> = teams.iter()
-                                .map(|t| format!("{} ({})", t.name, t.team_id))
-                                .collect();
-                            
-                            let (tx, rx) = std::sync::mpsc::channel();
-                            sender_clone.send(PlumeFrameMessage::RequestTeamSelection(team_names, tx)).ok();
-                            
-                            let selected_index = rx.recv()
-                                .map_err(|_| "Team selection cancelled".to_string())?
-                                .map_err(|e| format!("Team selection error: {}", e))?;
-                            
-                            &teams[selected_index as usize].team_id
+                            None
                         };
 
-                        let cert_identity = CertificateIdentity::new_with_session(
-                            &session,
-                            get_data_path(),
-                            None,
-                            team_id,
-                        ).await.map_err(|e| e.to_string())?;
+                        let mut package_file = package.package_file().clone();
 
-                        let mut signer = Signer::new(
-                            Some(cert_identity),
-                            signer_settings.clone(),
-                        );
+                        sender_clone.send(PlumeFrameMessage::WorkUpdated("Preparing package for installation...".into())).ok();
 
-                        session.qh_ensure_device(
-                            team_id,
-                            &device.name,
-                            &device.udid,
-                        )
-                        .await
-                        .map_err(|e| format!("Failed to ensure device is registered: {}", e))?;
+                        match signer_settings.mode {
+                            SignerMode::Pem => {
+                                let Some(account) = selected_account else {
+                                    return Err("No Apple ID account available for installation.".to_string());
+                                };
+                                let session = DeveloperSession::with(account.clone());
+
+                                let teams = session.qh_list_teams().await
+                                    .map_err(|e| format!("Failed to list teams: {}", e))?.teams;
+                            
+                                if teams.is_empty() {
+                                    return Err("No teams available for the Apple ID account.".to_string());
+                                }
+                                
+                                let team_id = if teams.len() == 1 {
+                                    &teams[0].team_id
+                                } else {
+                                    let team_names: Vec<String> = teams.iter()
+                                        .map(|t| format!("{} ({})", t.name, t.team_id))
+                                        .collect();
                                     
-                        sender_clone.send(PlumeFrameMessage::WorkUpdated("Extracting package...".to_string())).ok();
-                        
-                        let bundle = package.get_package_bundle()
-                            .map_err(|e| format!("Failed to get package bundle: {}", e))?;
+                                    let (tx, rx) = std::sync::mpsc::channel();
+                                    sender_clone.send(PlumeFrameMessage::RequestTeamSelection(team_names, tx)).ok();
+                                    
+                                    let selected_index = rx.recv()
+                                        .map_err(|_| "Team selection cancelled".to_string())?
+                                        .map_err(|e| format!("Team selection error: {}", e))?;
+                                    
+                                    &teams[selected_index as usize].team_id
+                                };
 
-                        signer.modify_bundle(&bundle, &Some(team_id.clone()))
-                            .await
-                            .map_err(|e| format!("Failed to modify bundle: {}", e))?;
+                                sender_clone.send(PlumeFrameMessage::WorkUpdated("Obtaining certificate identity...".into())).ok();
 
-                        sender_clone.send(PlumeFrameMessage::WorkUpdated(format!("Registering {}...", bundle.get_name().unwrap_or_default()))).ok();
+                                let cert_identity = CertificateIdentity::new_with_session(
+                                    &session,
+                                    get_data_path(),
+                                    None,
+                                    team_id,
+                                ).await.map_err(|e| e.to_string())?;
 
-                        signer.register_bundle(&bundle, &session, &team_id)
-                            .await
-                            .map_err(|e| format!("Failed to register bundle: {}", e))?;
+                                if let Some(device) = device.as_ref() {
+                                    sender_clone.send(PlumeFrameMessage::WorkUpdated("Ensuring current device is registered...".to_string())).ok();
+                                    session.qh_ensure_device(
+                                        team_id,
+                                        &device.name,
+                                        &device.udid,
+                                    ).await.map_err(|e| format!("Failed to ensure device is registered: {}", e))?;
+                                }
 
-                        sender_clone.send(PlumeFrameMessage::WorkUpdated(format!("Signing {}...", bundle.get_name().unwrap_or_default()))).ok();
+                                let mut signer = Signer::new(Some(cert_identity), signer_settings.clone());
 
-                        signer.sign_bundle(&bundle).await
-                            .map_err(|e| format!("Failed to sign bundle: {}", e))?;
+                                let bundle = package.get_package_bundle()
+                                    .map_err(|e| format!("Failed to get package bundle: {}", e))?;
 
-                        if signer_settings.mode == SignerMode::SignAndInstallMacOS {
-                            #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-                            device.install_app_mac(&bundle.bundle_dir()).await
-                                .map_err(|e| format!("Failed to install mac app: {}", e))?;
-                            
-                            #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-                            return Err("Mac installation not supported on this platform".to_string());
-                        } else {
-                            let progress_callback = {
-                                let sender = sender_clone.clone();
-                                move |progress: i32| {
-                                    let sender = sender.clone();
-                                    async move {
-                                        sender.send(PlumeFrameMessage::WorkUpdated(format!("Installing... {}%", progress))).ok();
+                                sender_clone.send(PlumeFrameMessage::WorkUpdated("Modifying bundle...".into())).ok();
+
+                                signer.modify_bundle(&bundle, &Some(team_id.clone())).await
+                                    .map_err(|e| format!("Failed to modify bundle: {}", e))?;
+
+                                sender_clone.send(PlumeFrameMessage::WorkUpdated("Registering bundle...".into())).ok();
+
+                                signer.register_bundle(&bundle, &session, &team_id).await
+                                    .map_err(|e| format!("Failed to register bundle: {}", e))?;
+
+                                sender_clone.send(PlumeFrameMessage::WorkUpdated("Signing bundle...".into())).ok();
+
+                                signer.sign_bundle(&bundle).await
+                                    .map_err(|e| format!("Failed to sign bundle: {}", e))?;
+
+                                package_file = bundle.bundle_dir().to_path_buf();
+                            }
+                            SignerMode::Adhoc => {
+                                let mut signer = Signer::new(None, signer_settings.clone());
+
+                                let bundle = package.get_package_bundle()
+                                    .map_err(|e| format!("Failed to get package bundle: {}", e))?;
+
+                                sender_clone.send(PlumeFrameMessage::WorkUpdated("Modifying bundle...".into())).ok();
+
+                                signer.modify_bundle(&bundle, &None).await
+                                    .map_err(|e| format!("Failed to modify bundle: {}", e))?;
+
+                                sender_clone.send(PlumeFrameMessage::WorkUpdated("Signing bundle...".into())).ok();
+
+                                signer.sign_bundle(&bundle).await
+                                    .map_err(|e| format!("Failed to sign bundle: {}", e))?;
+
+                                package_file = bundle.bundle_dir().to_path_buf();
+                            }
+                            _ => {
+                                let bundle = package.get_package_bundle()
+                                    .map_err(|e| format!("Failed to get package bundle: {}", e))?;
+                                
+                                package_file = bundle.bundle_dir().to_path_buf();
+                            }
+                        }
+
+                        sender_clone.send(PlumeFrameMessage::WorkUpdated("Preparing...".into())).ok();
+
+                        match signer_settings.install_mode {
+                            SignerInstallMode::InstallMac => {
+                                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                                {
+                                    if let Some(device) = device.as_ref() {
+                                        device.install_app_mac(&package_file).await
+                                            .map_err(|e| format!("Failed to install mac app: {}", e))?;
+                                    } else {
+                                        return Err("No device found for Mac installation.".to_string());
                                     }
                                 }
-                            };
+                            }
+                            SignerInstallMode::Install => {
+                                let progress_callback = {
+                                    let sender = sender_clone.clone();
+                                    move |progress: i32| {
+                                    let sender = sender.clone();
+                                        async move {
+                                            sender.send(PlumeFrameMessage::WorkUpdated(format!("Installing... {}%", progress))).ok();
+                                        }
+                                    }
+                                };
 
-                            device.install_app(&bundle.bundle_dir(), progress_callback).await
-                                .map_err(|e| format!("Failed to install app: {}", e))?;
+                                let device = device.ok_or_else(|| "No device found for installation.".to_string())?;
 
-                            if signer_settings.app.supports_pairing_file() {
-                                if let Some(usbmuxd_device) = &device.usbmuxd_device {
-                                    if usbmuxd_device.connection_type == idevice::usbmuxd::Connection::Usb {
-                                        if let (Some(custom_identifier), Some(pairing_file_bundle_path)) = (
-                                        signer.options.custom_identifier.as_ref(),
-                                        signer_settings.app.pairing_file_path(),
-                                    ) {
+                                device.install_app(&package_file, progress_callback).await
+                                    .map_err(|e| format!("Failed to install app: {}", e))?;
+
+                                if signer_settings.app.supports_pairing_file() {
+                                    if let Some(usbmuxd_device) = &device.usbmuxd_device {
+                                        if usbmuxd_device.connection_type == idevice::usbmuxd::Connection::Usb {
+                                            if let (Some(custom_identifier), Some(pairing_file_bundle_path)) = (
+                                            signer_settings.custom_identifier.as_ref(),
+                                            signer_settings.app.pairing_file_path(),
+                                        ) {
                                             device.install_pairing_record(custom_identifier, &pairing_file_bundle_path)
                                                 .await
                                                 .map_err(|e| format!("Failed to install pairing record: {}", e))?;
+                                            }
                                         }
                                     }
                                 }
+                            }
+                            SignerInstallMode::Export => {
+                                let archive_path = package.get_archive_based_on_path(package_file)
+                                    .map_err(|e| format!("Failed to archive package: {}", e))?;
+                                sender_clone.send(PlumeFrameMessage::ArchivePathReady(archive_path)).ok();
                             }
                         }
 
@@ -512,11 +574,18 @@ impl PlumeFrame {
                     });
 
                     if let Err(e) = install_result {
-                        sender_clone.send(PlumeFrameMessage::WorkEnded).ok();
-                        sender_clone.send(PlumeFrameMessage::Error(format!("{}", e))).ok();
-                        return;
-                    }
-                });
+                    sender_clone.send(PlumeFrameMessage::WorkEnded).ok();
+                    sender_clone.send(PlumeFrameMessage::Error(format!("{}", e))).ok();
+                    return;
+                }
+            });
+            }
+        });
+
+        self.install_page.set_install_choice_select_handler({
+            let sender = sender.clone();
+            move || {
+                sender.send(PlumeFrameMessage::InstallButtonStateChanged).ok();
             }
         });
 

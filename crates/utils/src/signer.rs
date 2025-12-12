@@ -12,19 +12,13 @@ use plume_core::{
 };
 
 use crate::{
-    Bundle,
-    BundleType,
-    Error,
-    PlistInfoTrait,
-    SignerMode,
-    SignerApp,
-    SignerOptions,
+    Bundle, BundleType, Error, PlistInfoTrait, SignerApp, SignerMode, SignerOptions,
 };
 
 pub struct Signer {
     certificate: Option<CertificateIdentity>,
     pub options: SignerOptions,
-    provisioning_files: Vec<MobileProvision>,
+    pub provisioning_files: Vec<MobileProvision>,
 }
 
 impl Signer {
@@ -39,21 +33,11 @@ impl Signer {
         }
     }
 
-    pub fn adhoc(options: SignerOptions) -> Self {
-        Self {
-            certificate: Some(CertificateIdentity {
-                cert: None,
-                key: None,
-                machine_id: None,
-                p12_data: None,
-                serial_number: None,
-            }),
-            options,
-            provisioning_files: Vec::new(),
-        }
-    }
-
     pub async fn modify_bundle(&mut self, bundle: &Bundle, team_id: &Option<String>) -> Result<(), Error> {
+        if self.options.mode == SignerMode::None {
+            return Ok(());
+        }
+
         let bundles = bundle.collect_bundles_sorted()?
             .into_iter()
             .filter(|b| b.bundle_type().should_have_entitlements())
@@ -90,7 +74,9 @@ impl Signer {
 
         let identifier = bundle.get_bundle_identifier();
 
-        if self.options.mode != SignerMode::Export && self.options.custom_identifier.is_none() {
+        if self.options.mode != SignerMode::Adhoc
+            && self.options.custom_identifier.is_none()
+        {
             if let (Some(identifier), Some(team_id)) = (identifier.as_ref(), team_id.as_ref()) {
                 self.options.custom_identifier = Some(format!("{identifier}.{team_id}"));
             }
@@ -104,8 +90,7 @@ impl Signer {
             }
         }
 
-        if
-            self.options.app == SignerApp::SideStore
+        if self.options.app == SignerApp::SideStore
             || self.options.app == SignerApp::AltStore
             || self.options.app == SignerApp::LiveContainerAndSideStore
         {
@@ -134,6 +119,15 @@ impl Signer {
             }
         }
 
+        if let Some(tweak_files) = self.options.tweaks.as_ref() {
+            crate::Tweak::install_ellekit(&bundle).await?;
+
+            for tweak_file in tweak_files {
+                let tweak = crate::Tweak::new(tweak_file, bundle).await?;
+                tweak.apply().await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -143,6 +137,9 @@ impl Signer {
         session: &DeveloperSession,
         team_id: &String,
     ) -> Result<(), Error> {
+        if self.options.mode != SignerMode::Pem {
+            return Ok(());
+        }
 
         let bundles = bundle.collect_bundles_sorted()?
             .into_iter()
@@ -180,13 +177,11 @@ impl Signer {
 
                 session.qh_ensure_app_id(&team_id, &sub_bundle.get_name().unwrap_or_default(), &id).await?;
 
-                let capabilities = session.v1_list_capabilities(&team_id).await?;
-
                 let app_id_id = session.qh_get_app_id(&team_id, &id).await?
                     .ok_or_else(|| Error::Other("Failed to get ensured app ID.".into()))?;
 
-                if let Some(caps) = macho.capabilities_for_entitlements(&capabilities.data) {
-                    session.v1_update_app_id(&team_id, &id, caps).await?;
+                if let Some(e) = macho.entitlements().as_ref() {
+                    session.v1_request_capabilities_for_entitlements(&team_id, &id, e).await?;
                 }
 
                 if let Some(app_groups) = macho.app_groups_for_entitlements() {
@@ -223,13 +218,28 @@ impl Signer {
     }
 
     pub async fn sign_bundle(&self, bundle: &Bundle) -> Result<(), Error> {
+        if self.options.mode == SignerMode::None {
+            return Ok(());
+        }
+
         let bundles = bundle.collect_bundles_sorted()?;
 
+        let settings = Self::build_base_settings(self.certificate.as_ref())?;
+        let entitlements_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict/>
+</plist>
+"#.to_string();
+
         for bundle in &bundles {
+            log::debug!("Signing bundle: {}", bundle.bundle_dir().display());
             Self::sign_single_bundle(
+                self,
                 bundle, 
-                self.certificate.as_ref(), 
-                &self.provisioning_files, 
+                &self.provisioning_files,
+                settings.clone(),
+                &entitlements_xml,
             )?;
         }
 
@@ -243,26 +253,22 @@ impl Signer {
     }
 
     fn sign_single_bundle(
+        &self,
         bundle: &Bundle,
-        certificate: Option<&CertificateIdentity>,
         provisioning_files: &[MobileProvision],
+        mut settings: SigningSettings<'_>,
+        entitlements_xml: &String,
     ) -> Result<(), Error> {
         if *bundle.bundle_type() == BundleType::Unknown {
             return Ok(());
         }
 
-        let mut settings = Self::build_base_settings(certificate)?;
-
-        let mut entitlements_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict/>
-</plist>
-"#.to_string();
+        let mut entitlements_xml = entitlements_xml.clone();
 
         // Only Apps and AppExtensions should have entitlements from provisioning profiles
         // Dylibs, frameworks, and other components should be signed without entitlements
-        if bundle.bundle_type().should_have_entitlements() && !provisioning_files.is_empty() {
+        // Skip provisioning profile handling for adhoc signing
+        if self.options.mode != SignerMode::Adhoc && bundle.bundle_type().should_have_entitlements() && !provisioning_files.is_empty() {
             let mut matched_prov = None;
 
             for prov in provisioning_files {
@@ -277,18 +283,16 @@ impl Signer {
             if let Some(prov) = matched_prov.or_else(|| provisioning_files.first()) {
                 let mut prov = prov.clone();
 
-                if let Some(bundle_id) = bundle.get_bundle_identifier() {
-                    prov.replace_wildcard_in_entitlements(&bundle_id);
-                }
-
                 if let Some(bundle_executable) = bundle.get_executable() {
-                    let binary_path = bundle.bundle_dir().join(bundle_executable);
-                    prov.merge_entitlements(binary_path).ok();
+                    if let Some(bundle_id) = bundle.get_bundle_identifier() {
+                        let binary_path = bundle.bundle_dir().join(bundle_executable);
+                        prov.merge_entitlements(binary_path, &bundle_id).ok();
+                    }
                 }
 
                 std::fs::write(
                     bundle.bundle_dir().join("embedded.mobileprovision"),
-                    &prov.provision_data,
+                    &prov.data,
                 )?;
 
                 if let Ok(ent_xml) = prov.entitlements_as_bytes() {
@@ -297,7 +301,10 @@ impl Signer {
             }
         }
 
-        settings.set_entitlements_xml(SettingsScope::Main, entitlements_xml)?;
+        if self.options.mode != SignerMode::Adhoc {
+            settings.set_entitlements_xml(SettingsScope::Main, entitlements_xml)?;
+        }
+
         UnifiedSigner::new(settings).sign_path_in_place(bundle.bundle_dir())?;
 
         Ok(())
@@ -310,7 +317,6 @@ impl Signer {
 
         if let Some(cert) = certificate {
             cert.load_into_signing_settings(&mut settings)?;
-            settings.set_team_id_from_signing_certificate();
         }
 
         settings.set_for_notarization(false);
