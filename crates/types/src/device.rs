@@ -94,7 +94,7 @@ impl Device {
         }
 
         let mut f = ac.open(path, AfcFopenMode::Wr).await?;
-        f.write(&pairing_file.serialize().unwrap()).await?;
+        f.write_entire(&pairing_file.serialize().unwrap()).await?;
 
         Ok(())
     }
