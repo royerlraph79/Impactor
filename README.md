@@ -73,12 +73,10 @@ You need:
 - [CMake](https://cmake.org/download/) (and a c++ compiler).
 
 ```sh
-# Applies our patches in ./patches 
-cargo install patch-crate
-cargo patch-crate --force && cargo fetch --locked
-
-# Building / testing
+# Building / testing GUI
 cargo run --bin plumeimpactor
+# Building / texting CLI
+cargo run --bin plumesign -- <args>
 ```
 
 Extra requirements are shown below for building if you don't have these already, and trust me, it is convoluted.
