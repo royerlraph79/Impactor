@@ -42,7 +42,7 @@ impl RefreshDaemon {
 
             loop {
                 if let Err(e) = rt.block_on(self.check_and_refresh()) {
-                    eprintln!("Refresh daemon error: {}", e);
+                    log::error!("Refresh daemon error: {}", e);
                 }
 
                 thread::sleep(self.check_interval);
@@ -60,7 +60,7 @@ impl RefreshDaemon {
         for (udid, refresh_device) in store.refreshes() {
             for app in &refresh_device.apps {
                 if app.scheduled_refresh <= now {
-                    println!("App at {:?} needs refresh for device {}", app.path, udid);
+                    log::info!("App at {:?} needs refresh for device {}", app.path, udid);
 
                     let device = self.wait_for_device(udid).await?;
 
@@ -74,11 +74,11 @@ impl RefreshDaemon {
     }
 
     async fn wait_for_device(&self, udid: &str) -> Result<Device, String> {
-        println!("Waiting for device {} to connect...", udid);
+        log::info!("Waiting for device {} to connect...", udid);
 
         if let Ok(devices) = self.connected_devices.lock() {
             if let Some(device) = devices.get(udid) {
-                println!("Device {} is already connected", udid);
+                log::info!("Device {} is already connected", udid);
                 return Ok(device.clone());
             }
         }
@@ -93,7 +93,7 @@ impl RefreshDaemon {
 
             if let Ok(devices) = self.connected_devices.lock() {
                 if let Some(device) = devices.get(udid) {
-                    println!("Device {} connected", udid);
+                    log::info!("Device {} connected", udid);
                     return Ok(device.clone());
                 }
             }
@@ -109,7 +109,7 @@ impl RefreshDaemon {
         app: &plume_store::RefreshApp,
         device: &Device,
     ) -> Result<(), String> {
-        println!("Starting refresh for app at {:?}", app.path);
+        log::info!("Starting refresh for app at {:?}", app.path);
 
         let account = store
             .get_account(&refresh_device.account)
@@ -158,11 +158,12 @@ impl RefreshDaemon {
         let needs_reinstall = device.is_mac || identity_is_new || !is_installed;
 
         if needs_reinstall {
-            println!("Resigning and reinstalling app...");
             self.resign_and_reinstall(app, device, &session, team_id)
                 .await?;
         } else {
-            println!("Certificate exists and app is installed, updating provisioning profiles...");
+            log::info!(
+                "Certificate exists and app is installed, updating provisioning profiles..."
+            );
             self.update_provisioning_profiles(app, device, &session, team_id)
                 .await?;
         }
@@ -170,7 +171,7 @@ impl RefreshDaemon {
         self.update_refresh_schedule(store, refresh_device, app)
             .await?;
 
-        println!("Successfully refreshed app at {:?}", app.path);
+        log::info!("Successfully refreshed app at {:?}", app.path);
 
         Ok(())
     }
@@ -292,7 +293,7 @@ impl RefreshDaemon {
             .add_or_update_refresh_device_sync(updated_device)
             .map_err(|e| format!("Failed to update refresh schedule: {}", e))?;
 
-        println!("Next refresh scheduled for: {}", scheduled_refresh);
+        log::info!("Next refresh scheduled for: {}", scheduled_refresh);
 
         Ok(())
     }

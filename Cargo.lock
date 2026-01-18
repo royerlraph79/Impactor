@@ -5665,6 +5665,7 @@ dependencies = [
  "iced",
  "idevice",
  "image",
+ "log",
  "open",
  "plist",
  "plume_core",

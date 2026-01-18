@@ -442,7 +442,7 @@ impl Impactor {
                                                     )
                                                     .await
                                                     .unwrap_or_else(|e| {
-                                                        eprintln!("Failed to fetch teams: {}", e);
+                                                        log::error!("Failed to fetch teams: {}", e);
                                                         Vec::new()
                                                     })
                                                 });
@@ -467,7 +467,7 @@ impl Impactor {
                                 if let Err(e) =
                                     store.update_account_team_sync(email, team_id.clone())
                                 {
-                                    eprintln!("Failed to update team: {:?}", e);
+                                    log::error!("Failed to update team: {:?}", e);
                                 } else {
                                     self.account_store = Some(Self::init_account_store_sync());
                                 }
@@ -550,9 +550,14 @@ impl Impactor {
                                         let start = std::time::Instant::now();
                                         let timeout = std::time::Duration::from_secs(60);
 
+                                        log::info!(
+                                            "Attempting to refresh app at {:?} on device {}, waiting...",
+                                            app.path, udid
+                                        );
+
                                         let device_opt = loop {
                                             if start.elapsed() > timeout {
-                                                eprintln!("Timeout waiting for device {}", udid);
+                                                log::error!("Timeout waiting for device {}", udid);
                                                 break None;
                                             }
 
@@ -571,9 +576,9 @@ impl Impactor {
                                                 .refresh_app(&store, refresh_device, app, &device)
                                                 .await
                                             {
-                                                eprintln!("Failed to refresh app: {}", e);
+                                                log::error!("Failed to refresh app: {}", e);
                                             } else {
-                                                println!(
+                                                log::info!(
                                                     "Successfully refreshed app at {:?}",
                                                     app.path
                                                 );
@@ -599,12 +604,13 @@ impl Impactor {
                             std::thread::spawn(move || {
                                 if app_path_buf.exists() {
                                     if let Err(e) = std::fs::remove_dir_all(&app_path_buf) {
-                                        eprintln!(
+                                        log::error!(
                                             "Failed to delete app at {:?}: {}",
-                                            app_path_buf, e
+                                            app_path_buf,
+                                            e
                                         );
                                     } else {
-                                        println!("Deleted app at {:?}", app_path_buf);
+                                        log::info!("Deleted app at {:?}", app_path_buf);
                                     }
                                 }
                             });
