@@ -18,11 +18,14 @@ jobs:
       - name: Update metainfo
         run: ./update_meta.sh
 
-      - name: Commit and merge in changes
+      - name: Commit & upload
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add upload/dev.khcrysalis.PlumeImpactor.metainfo.xml
+          git commit -m "Update metainfo.xml for release ${{ github.event.release.tag_name }}"
+          git push
 
-          gh release upload "${{ github.event.release.tag_name }}" upload/dev.khcrysalis.PlumeImpactor.metainfo.xml
+          gh release upload "${{ github.event.release.tag_name }}" upload/dev.khcrysalis.PlumeImpactor.metainfo.xml --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
