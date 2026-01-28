@@ -157,6 +157,8 @@ pub enum SignerApp {
     LiveContainerAndSideStore,
     StikDebug,
     SparseBox,
+    EnsWilde,
+    ByeTunes,
 }
 
 impl std::fmt::Display for SignerApp {
@@ -172,6 +174,8 @@ impl std::fmt::Display for SignerApp {
             LiveContainer | LiveContainerAndSideStore => "LiveContainer",
             StikDebug => "StikDebug",
             SparseBox => "SparseBox",
+            EnsWilde => "EnsWilde",
+            ByeTunes => "ByeTunes",
         };
         write!(f, "{}", name)
     }
@@ -193,6 +197,8 @@ impl SignerApp {
             ("com.rileytestut.AltStore", SignerApp::AltStore),
             ("com.stik.sj", SignerApp::StikDebug),
             ("com.kdt.SparseBox", SignerApp::SparseBox),
+            ("com.yangjiii.EnsWilde", SignerApp::EnsWilde),
+            ("com.EduAlexxis.MusicManager", SignerApp::ByeTunes),
         ];
 
         for &(known_id, app) in KNOWN_APPS {
@@ -233,6 +239,8 @@ impl SignerApp {
             ("protokolle", SignerApp::Protokolle),
             ("stikdebug", SignerApp::StikDebug),
             ("sparsebox", SignerApp::SparseBox),
+            ("enswilde", SignerApp::EnsWilde),
+            ("byetunes", SignerApp::ByeTunes),
         ];
 
         for &(needle, app) in KNOWN_APP_NAMES {
@@ -257,13 +265,14 @@ impl SignerApp {
     pub fn pairing_file_path(&self) -> Option<&'static str> {
         use SignerApp::*;
         match self {
-            Antrag | Feather | Protokolle | StikDebug | SparseBox => {
+            Antrag | Feather | Protokolle | StikDebug | SparseBox | EnsWilde => {
                 Some("/Documents/pairingFile.plist")
             }
             SideStore => Some("/Documents/ALTPairingFile.mobiledevicepairing"),
             LiveContainerAndSideStore | LiveContainer => {
                 Some("/Documents/SideStore/Documents/ALTPairingFile.mobiledevicepairing")
             }
+            ByeTunes => Some("/Documents/pairing file/pairingFile.plist"),
             _ => None,
         }
     }
