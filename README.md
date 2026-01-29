@@ -80,6 +80,8 @@ Supported apps for pairing file:
 - `Antrag`
 - `Protokolle`
 - `StikDebug`
+- `EnsWilde`
+- `ByeTunes`
 
 You can retrieve this file by either sideloading the supported app of your choice, or going to the `Utilities` page when a device is connected and press install for the supported app. Head over to the [downloads](https://github.com/khcrysalis/PlumeImpactor/releases).
 
