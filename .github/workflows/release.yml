@@ -5,86 +5,31 @@ on:
     tags:
       - v*
   workflow_dispatch:
+
 env:
   BINARY_NAME: plumeimpactor
   BINARY_NAME_CLI: plumesign
   BUNDLE_NAME: Impactor
 
 jobs:
-  build-macos-slices:
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            arch: arm
-            suffix: arm64
-            osxcross_prefix: arm64-apple-darwin21.4
+  build-macos-arm:
+    runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
-      - name: Setup osxcross
-        uses: Timmmm/setup-osxcross@v3
-        with:
-          osx-version: "12.3"
+          targets: aarch64-apple-darwin
 
-      - name: Build binaries (${{ matrix.arch }})
+      - name: Build ARM64 Binary
         run: |
-          target_env=$(echo "${{ matrix.target }}" | tr '-' '_')
-          target_env_upper=$(echo "${target_env}" | tr '[:lower:]' '[:upper:]')
-          prefix="${{ matrix.osxcross_prefix }}"
-          osxcross_bin="$(dirname "$(command -v "${prefix}-clang")")"
-          osxcross_root="$(cd "${osxcross_bin}/.." && pwd)"
-          sdk_dir="${osxcross_root}/SDK"
-          if [ -d "${sdk_dir}" ]; then
-            sdkroot="$(ls -d "${sdk_dir}"/MacOSX*.sdk 2>/dev/null | sort -V | tail -n1)"
-            if [ -n "${sdkroot}" ]; then
-              export SDKROOT="${sdkroot}"
-            fi
-          fi
           export MACOSX_DEPLOYMENT_TARGET="11.0"
-          ld_path=""
-          for name in "${prefix}-ld" "${prefix}-ld64" "ld64" "ld"; do
-            if [ -x "${osxcross_bin}/${name}" ]; then
-              ld_path="${osxcross_bin}/${name}"
-              break
-            fi
-          done
-          export "CC_${target_env}=${osxcross_bin}/${prefix}-clang"
-          export "CXX_${target_env}=${osxcross_bin}/${prefix}-clang++"
-          export "AR_${target_env}=${osxcross_bin}/${prefix}-ar"
-          export "RANLIB_${target_env}=${osxcross_bin}/${prefix}-ranlib"
-          export "CARGO_TARGET_${target_env_upper}_LINKER=${osxcross_bin}/${prefix}-clang"
-          if [ -n "${ld_path}" ]; then
-            export "CFLAGS_${target_env}=-fuse-ld=${ld_path}"
-            export "CXXFLAGS_${target_env}=-fuse-ld=${ld_path}"
-            export "LDFLAGS_${target_env}=-fuse-ld=${ld_path}"
-            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-fuse-ld=${ld_path}"
-          fi
-          cargo build --bins --workspace --release --target ${{ matrix.target }}
+          cargo build --bins --workspace --release --target aarch64-apple-darwin
+
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/plumeimpactor dist/plumeimpactor-macos-${{ matrix.suffix }}
-          cp target/${{ matrix.target }}/release/plumesign dist/plumesign-macos-${{ matrix.suffix }}
-
-      - name: Upload ${{ matrix.arch }} Slice
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-macos-slice-${{ matrix.arch }}
-          path: dist/*
-
-  build-macos-universal:
-    runs-on: macos-latest
-    needs: [build-macos-slices]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get ARM Slice
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-macos-slice-arm
-          path: dist/slices
+          cp target/aarch64-apple-darwin/release/${{ env.BINARY_NAME }} dist/${{ env.BINARY_NAME }}-macos-arm64
+          cp target/aarch64-apple-darwin/release/${{ env.BINARY_NAME_CLI }} dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
 
       - name: Setup Certificates
         uses: apple-actions/import-codesign-certs@v5
@@ -92,72 +37,48 @@ jobs:
           p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
           p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
 
-      - name: Download CreateDMG
-        run: |
-          brew install create-dmg
+      - name: Install create-dmg
+        run: brew install create-dmg
 
-      - name: Create ARM64 Binary
+      - name: Create App Bundle
         run: |
-          mkdir -p dist/out
-          cp dist/slices/plumeimpactor-macos-arm64 dist/plumeimpactor-macos-arm64
-          cp dist/slices/plumesign-macos-arm64 dist/plumesign-macos-arm64
+          make macos BIN1=dist/${{ env.BINARY_NAME }}-macos-arm64 BUNDLE=1 ARCH=arm64
+          make macos BIN1=dist/${{ env.BINARY_NAME_CLI }}-macos-arm64 ARCH=arm64
 
       - name: Codesign
         run: |
           mkdir -p dist/dmg
-          codesign --force --options runtime \
-            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/plumeimpactor-macos-arm64
-          codesign --force --options runtime \
-            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/plumesign-macos-arm64
+          mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg/
 
-      - name: Notarize Binaries
-        run: |
-          cd dist
-          zip plumeimpactor-macos-arm64.zip plumeimpactor-macos-arm64
-          zip plumesign-macos-arm64.zip plumesign-macos-arm64
-          xcrun notarytool submit plumeimpactor-macos-arm64.zip --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
-          xcrun notarytool submit plumesign-macos-arm64.zip --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          codesign --deep --force --options runtime \
+            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
+            dist/dmg/${{ env.BUNDLE_NAME }}.app
 
       - name: Create DMG
         run: |
-          mkdir -p dist/out
           create-dmg \
-            --volname "${{ env.BUNDLE_NAME }} (ARM64)" \
+            --volname ${{ env.BUNDLE_NAME }} \
             --background "package/macos/background.png" \
             --window-pos 200 120 \
             --window-size 510 350 \
             --icon-size 100 \
-            --icon "${{ env.BINARY_NAME }}-macos-arm64" 160 155 \
-            --hide-extension "${{ env.BINARY_NAME }}-macos-arm64" \
+            --icon ${{ env.BUNDLE_NAME }}.app 160 155 \
+            --hide-extension "${{ env.BUNDLE_NAME }}.app" \
             --app-drop-link 350 155 \
-            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg dist/slices
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg \
+            dist/dmg
 
-      - name: Upload ARM64 DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-macos-universal
-          path: |
-            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
-            dist/plumesign-macos-arm64
-
-  release:
-    runs-on: ubuntu-24.04
-    needs: [build-macos-universal]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download MacOS Universal Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-macos-universal
-          path: prepare/
-
-      - name: Prepare Uploads
+      - name: Notarize DMG
         run: |
-          mkdir -p upload
-          shopt -s globstar
-          mv prepare/**/*.dmg upload/
-          mv prepare/**/plumesign* upload/
+          xcrun notarytool submit \
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg \
+            --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_ID_TEAM }}" \
+            --wait
+
+          xcrun stapler staple \
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
 
       - name: Extract Version
         id: get_version
@@ -171,9 +92,9 @@ jobs:
           name: v${{ steps.get_version.outputs.version }}
           tag_name: v${{ steps.get_version.outputs.version }}
           files: |
-            upload/*
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
+            dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
           generate_release_notes: true
-          fail_on_unmatched_files: true
           draft: true
         env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
