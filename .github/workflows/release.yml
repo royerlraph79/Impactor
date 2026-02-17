@@ -126,7 +126,7 @@ jobs:
 
       - name: Notarize DMG
         run: |
-          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_TEAM_ID }}" --wait
+          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
           xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
 
       - name: Upload ARM64 DMG
