@@ -112,8 +112,11 @@ jobs:
 
       - name: Notarize Binaries
         run: |
-          xcrun notarytool submit dist/plumeimpactor-macos-arm64 --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
-          xcrun notarytool submit dist/plumesign-macos-arm64 --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          cd dist
+          zip plumeimpactor-macos-arm64.zip plumeimpactor-macos-arm64
+          zip plumesign-macos-arm64.zip plumesign-macos-arm64
+          xcrun notarytool submit plumeimpactor-macos-arm64.zip --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          xcrun notarytool submit plumesign-macos-arm64.zip --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
 
       - name: Create DMG
         run: |
