@@ -110,6 +110,11 @@ jobs:
           codesign --force --options runtime \
             --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/plumesign-macos-arm64
 
+      - name: Notarize Binaries
+        run: |
+          xcrun notarytool submit dist/plumeimpactor-macos-arm64 --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          xcrun notarytool submit dist/plumesign-macos-arm64 --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+
       - name: Create DMG
         run: |
           mkdir -p dist/out
@@ -123,11 +128,6 @@ jobs:
             --hide-extension "${{ env.BINARY_NAME }}-macos-arm64" \
             --app-drop-link 350 155 \
             dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg dist/slices
-
-      - name: Notarize DMG
-        run: |
-          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
-          xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
 
       - name: Upload ARM64 DMG
         uses: actions/upload-artifact@v4
