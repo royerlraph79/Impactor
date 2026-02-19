@@ -52,3 +52,4 @@ rustls = { version = "0.23.32", default-features = false, features = [
     "tls12",
     "ring",
 ] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

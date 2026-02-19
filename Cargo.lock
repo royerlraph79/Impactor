@@ -3618,6 +3618,8 @@ dependencies = [
  "moxcms",
  "num-traits",
  "png 0.18.0",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -5396,9 +5398,11 @@ name = "plume_utils"
 version = "2.0.3"
 dependencies = [
  "decompress",
+ "flate2",
  "futures",
  "goblin",
  "idevice",
+ "image",
  "log",
  "plist",
  "plume_core",
@@ -9689,6 +9693,21 @@ checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
 dependencies = [
  "cc",
  "pkg-config",
+]
+
+[[package]]
+name = "zune-core"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb8a0807f7c01457d0379ba880ba6322660448ddebc890ce29bb64da71fb40f9"
+
+[[package]]
+name = "zune-jpeg"
+version = "0.5.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "410e9ecef634c709e3831c2cfdb8d9c32164fae1c67496d5b68fff728eec37fe"
+dependencies = [
+ "zune-core",
 ]
 
 [[package]]
