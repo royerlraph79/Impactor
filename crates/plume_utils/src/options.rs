@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 /// Settings for the signer process.
 #[derive(Clone, Debug)]
 pub struct SignerOptions {
@@ -7,6 +9,9 @@ pub struct SignerOptions {
     pub custom_identifier: Option<String>,
     /// Custom version override.
     pub custom_version: Option<String>,
+    pub custom_icon: Option<PathBuf>,
+    /// Custom entitlements plist to embed (only used when single_profile is set).
+    pub custom_entitlements: Option<PathBuf>,
     /// Feature support options.
     pub features: SignerFeatures,
     /// Embedding options.
@@ -16,7 +21,7 @@ pub struct SignerOptions {
     /// Installation mode.
     pub install_mode: SignerInstallMode,
     /// Tweaks to apply before signing.
-    pub tweaks: Option<Vec<std::path::PathBuf>>,
+    pub tweaks: Option<Vec<PathBuf>>,
     /// App type.
     pub app: SignerApp,
     /// Apply autorefresh
@@ -29,6 +34,8 @@ impl Default for SignerOptions {
             custom_name: None,
             custom_identifier: None,
             custom_version: None,
+            custom_icon: None,
+            custom_entitlements: None,
             features: SignerFeatures::default(),
             embedding: SignerEmbedding::default(),
             mode: SignerMode::default(),
