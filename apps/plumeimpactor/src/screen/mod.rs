@@ -794,6 +794,12 @@ impl Impactor {
     fn navigate_to_screen(&mut self, screen_type: ImpactorScreenType) {
         match screen_type {
             ImpactorScreenType::Main => {
+                if let ImpactorScreen::Installer(installer) = &self.current_screen {
+                    if let Some(package) = installer.selected_package.clone() {
+                        package.remove_package_stage();
+                    }
+                }
+
                 self.current_screen = ImpactorScreen::Main(general::GeneralScreen::new());
             }
             ImpactorScreenType::Utilities => {
@@ -848,9 +854,17 @@ impl Impactor {
                     {
                         Ok(_) => {
                             let _ = tx.send(("Installation complete!".to_string(), 100));
+
+                            if std::env::var("PLUME_DELETE_AFTER_FINISHED").is_err() {
+                                package.remove_package_stage();
+                            }
                         }
                         Err(e) => {
                             let _ = tx_error.send((format!("Error: {}", e), -1));
+
+                            if std::env::var("PLUME_DELETE_AFTER_FINISHED").is_err() {
+                                package.remove_package_stage();
+                            }
                         }
                     }
                 });

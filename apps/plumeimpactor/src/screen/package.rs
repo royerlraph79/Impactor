@@ -1,5 +1,5 @@
 use iced::widget::{
-    button, checkbox, column, container, image, pick_list, row, scrollable, text, text_input,
+    button, checkbox, column, container, image, pick_list, row, scrollable, stack, text, text_input,
 };
 use iced::{Alignment, Center, Element, Fill, Task};
 use plume_utils::{Package, PlistInfoTrait, SignerInstallMode, SignerMode, SignerOptions};
@@ -421,22 +421,34 @@ impl PackageScreen {
 
         const ICON_SIZE: f32 = 56.0;
 
+        let loading_indicator = container(text("⏳"))
+            .width(ICON_SIZE)
+            .height(ICON_SIZE)
+            .align_x(Center)
+            .align_y(Center);
+
         let preview: Element<'_, Message> = if let Some(path) = &self.options.custom_icon {
-            image(image::Handle::from_path(path))
-                .width(ICON_SIZE)
-                .height(ICON_SIZE)
-                .border_radius(appearance::THEME_CORNER_RADIUS)
-                .into()
+            stack![
+                loading_indicator,
+                image(image::Handle::from_path(path))
+                    .width(ICON_SIZE)
+                    .height(ICON_SIZE)
+                    .border_radius(appearance::THEME_CORNER_RADIUS)
+            ]
+            .into()
         } else if let Some(data) = self
             .selected_package
             .as_ref()
             .and_then(|p| p.app_icon_data.as_deref())
         {
-            image(image::Handle::from_bytes(data.to_vec()))
-                .width(ICON_SIZE)
-                .height(ICON_SIZE)
-                .border_radius(appearance::THEME_CORNER_RADIUS)
-                .into()
+            stack![
+                loading_indicator,
+                image(image::Handle::from_bytes(data.to_vec()))
+                    .width(ICON_SIZE)
+                    .height(ICON_SIZE)
+                    .border_radius(appearance::THEME_CORNER_RADIUS)
+            ]
+            .into()
         } else {
             container(text("No icon").size(11))
                 .width(ICON_SIZE)
