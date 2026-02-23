@@ -44,6 +44,32 @@
     <color type="primary" scheme_preference="dark">#a6415b</color>
   </branding>
   <releases>
+    <release version="v2.1.0" date="2026-02-23">
+      <url type="details">https://github.com/claration/Impactor/releases/tag/v2.1.0</url>
+      <description>
+        <p>What's Changed</p>
+        <ul>
+          <li>Auto-refresh now constantly tries to find the correct device connected instead of timing out and waiting an hour when a scheduled refresh is due.</li>
+        </ul>
+        <ul>
+          <li>Added options specify a custom entitlements when signing an app.</li>
+        </ul>
+        <ul>
+          <li>Added options to change an apps icon when signing.</li>
+          <li>Added preview for the app icon.</li>
+          <li>Added [StikStore](https://stikstore.app/) to supported pairing file apps.</li>
+          <li>Fixed an issue where some temporary `.ipa` files may not be deleted after installing/going back to a previous screen.</li>
+          <li>Fixed some authenticating issues by adding some extra parameters in a request (should fix some china/regional issues).</li>
+          <li>Fixed some authenticating issues by lowercasing the email before salting.</li>
+          <li>Fixed rare response parsing issue when listing Team IDs.</li>
+          <li>Fixed crash that occurred when the user may not have a machine supporting Vulkan, by falling back to a software render (`tiny-skia`).</li>
+          <li>Fixed crash in the `.appimage` on some distributions by excluding X11-specific libraries from being bundled by @se2crid in #108</li>
+          <li>Fixed titlebar icon not being displayed properly on Linux by @Milli189 &amp; @mq1 in #102 &amp; #118</li>
+          <li>Fixed issue where taskbar actions were not updating properly after refreshing automatically by @se2crid in #109 </li>
+          <li>Fixed issue in CLI where it did not support `.(t)ipa` files (previously only supported `.app` bundles).</li>
+        </ul>
+      </description>
+    </release>
     <release version="v2.0.3" date="2026-01-28">
       <url type="details">https://github.com/khcrysalis/Impactor/releases/tag/v2.0.3</url>
       <description>
