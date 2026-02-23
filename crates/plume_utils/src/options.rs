@@ -184,7 +184,7 @@ impl std::fmt::Display for SignerApp {
             SparseBox => "SparseBox",
             EnsWilde => "EnsWilde",
             ByeTunes => "ByeTunes",
-            StikStoee => "StikStore",
+            StikStore => "StikStore",
         };
         write!(f, "{}", name)
     }
