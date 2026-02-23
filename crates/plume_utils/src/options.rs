@@ -122,7 +122,7 @@ impl std::fmt::Display for SignerMode {
         match self {
             SignerMode::Pem => write!(f, "Apple ID"),
             SignerMode::Adhoc => write!(f, "Adhoc"),
-            SignerMode::None => write!(f, "Modify"),
+            SignerMode::None => write!(f, "No Modify"),
         }
     }
 }
