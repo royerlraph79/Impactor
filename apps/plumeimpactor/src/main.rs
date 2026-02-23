@@ -38,11 +38,13 @@ fn main() -> iced::Result {
         }
     };
 
+    // For tray on linux.
     #[cfg(target_os = "linux")]
     {
         gtk::init().expect("GTK init failed");
     }
 
+    // For notifications on macOS.
     #[cfg(target_os = "macos")]
     {
         notify_rust::get_bundle_identifier_or_default("Impactor");
@@ -52,22 +54,42 @@ fn main() -> iced::Result {
     let (_daemon_handle, connected_devices) = spawn_refresh_daemon();
     screen::set_refresh_daemon_devices(connected_devices);
 
-    // we set this to none so we can avoid prioritizing the gpu
-    unsafe {
-        std::env::set_var("WGPU_POWER_PREF", "none");
-    }
-
     // We're going to try and try running the iced_daemon with different
     // environment variables so it can run properly
     // RE: https://github.com/claration/Impactor/issues/103, https://github.com/claration/Impactor/issues/90
-    run_daemon().or_else(|_| try_with_env("ICED_BACKEND", "tiny-skia"))
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    check_gpu();
+
+    run_daemon()
 }
 
-fn try_with_env(var: &str, value: &str) -> iced::Result {
-    unsafe {
-        std::env::set_var(var, value);
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn check_gpu() {
+    let instance = wgpu::Instance::default();
+
+    let adapter =
+        iced::futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+
+    match adapter {
+        Ok(adapter) => {
+            if !adapter.features().contains(wgpu::Features::SHADER_F16) {
+                log::warn!("No FP16 support, falling back to tiny-skia");
+                unsafe {
+                    std::env::set_var("ICED_BACKEND", "tiny-skia");
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("No adapter found: {e}, falling back to tiny-skia");
+            unsafe {
+                std::env::set_var("ICED_BACKEND", "tiny-skia");
+            }
+        }
     }
-    run_daemon()
 }
 
 fn run_daemon() -> iced::Result {

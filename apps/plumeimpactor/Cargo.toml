@@ -23,18 +23,19 @@ plume_utils = { path = "../../crates/plume_utils" }
 plume_store = { path = "../../crates/plume_store" }
 
 iced = { version = "0.14.0", features = ["image-without-codecs", "advanced"] }
-tray-icon = { version = "0.21.2", default-features = false }
-rfd = "0.16.0"
-open = "5.3.3"
-notify-rust = "4.11.7"
-single-instance = "0.3.3"
-auto-launcher = "0.6.1"
+wgpu = "27.0.1"                                                                 # Power references
+tray-icon = { version = "0.21.2", default-features = false }                    # System tray icon
+rfd = "0.16.0"                                                                  # File dialogs
+open = "5.3.3"                                                                  # Opening links (I know, useless)
+notify-rust = "4.11.7"                                                          # Notifications
+single-instance = "0.3.3"                                                       # Ensuring single instance of the app on Linux and Windows
+auto-launcher = "0.6.1"                                                         # Auto-launching on startup
 
 [target.'cfg(target_os = "macos")'.dependencies]
-plume_gestalt = { path = "../../crates/plume_gestalt" }
+plume_gestalt = { path = "../../crates/plume_gestalt" } 
 
 [build-dependencies]
 winresource = "0.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-gtk = "0.18"
+gtk = "0.18"                                                                    # System tray icon
