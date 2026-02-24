@@ -3,6 +3,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Center, Element, Fill, Task};
 use plume_utils::{Package, PlistInfoTrait, SignerInstallMode, SignerMode, SignerOptions};
+use std::path::PathBuf;
 
 use crate::appearance;
 
@@ -37,13 +38,29 @@ pub enum Message {
 pub struct PackageScreen {
     pub selected_package: Option<Package>,
     pub options: SignerOptions,
+    package_icon_handle: Option<image::Handle>,
+    custom_icon_path: Option<PathBuf>,
+    custom_icon_handle: Option<image::Handle>,
 }
 
 impl PackageScreen {
     pub fn new(package: Option<Package>, options: SignerOptions) -> Self {
+        let package_icon_handle = package
+            .as_ref()
+            .and_then(|p| p.app_icon_data.as_ref())
+            .map(|data| image::Handle::from_bytes(data.clone()));
+
+        let custom_icon_path = options.custom_icon.clone();
+        let custom_icon_handle = custom_icon_path
+            .as_ref()
+            .map(|path| image::Handle::from_path(path.clone()));
+
         Self {
             selected_package: package,
             options,
+            package_icon_handle,
+            custom_icon_path,
+            custom_icon_handle,
         }
     }
 
@@ -183,13 +200,17 @@ impl PackageScreen {
                     .pick_file();
 
                 if let Some(path) = path {
-                    self.options.custom_icon = Some(path);
+                    self.options.custom_icon = Some(path.clone());
+                    self.custom_icon_path = Some(path.clone());
+                    self.custom_icon_handle = Some(image::Handle::from_path(path));
                 }
 
                 Task::none()
             }
             Message::ClearCustomIcon => {
                 self.options.custom_icon = None;
+                self.custom_icon_path = None;
+                self.custom_icon_handle = None;
                 Task::none()
             }
             Message::SetCustomEntitlements => {
@@ -417,7 +438,7 @@ impl PackageScreen {
     }
 
     fn view_custom_icon(&self) -> Element<'_, Message> {
-        let has_custom = self.options.custom_icon.is_some();
+        let has_custom = self.custom_icon_path.is_some();
 
         const ICON_SIZE: f32 = 56.0;
 
@@ -427,23 +448,19 @@ impl PackageScreen {
             .align_x(Center)
             .align_y(Center);
 
-        let preview: Element<'_, Message> = if let Some(path) = &self.options.custom_icon {
+        let preview: Element<'_, Message> = if let Some(handle) = &self.custom_icon_handle {
             stack![
                 loading_indicator,
-                image(image::Handle::from_path(path))
+                image(handle.clone())
                     .width(ICON_SIZE)
                     .height(ICON_SIZE)
                     .border_radius(appearance::THEME_CORNER_RADIUS)
             ]
             .into()
-        } else if let Some(data) = self
-            .selected_package
-            .as_ref()
-            .and_then(|p| p.app_icon_data.as_deref())
-        {
+        } else if let Some(handle) = &self.package_icon_handle {
             stack![
                 loading_indicator,
-                image(image::Handle::from_bytes(data.to_vec()))
+                image(handle.clone())
                     .width(ICON_SIZE)
                     .height(ICON_SIZE)
                     .border_radius(appearance::THEME_CORNER_RADIUS)
