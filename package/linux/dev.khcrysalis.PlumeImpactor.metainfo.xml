@@ -44,6 +44,15 @@
     <color type="primary" scheme_preference="dark">#a6415b</color>
   </branding>
   <releases>
+    <release version="v2.1.1" date="2026-02-24">
+      <url type="details">https://github.com/claration/Impactor/releases/tag/v2.1.1</url>
+      <description>
+        <p>What's Changed</p>
+        <ul>
+          <li>Fixed icon preview flicker during IPA import by @se2crid </li>
+        </ul>
+      </description>
+    </release>
     <release version="v2.1.0" date="2026-02-23">
       <url type="details">https://github.com/claration/Impactor/releases/tag/v2.1.0</url>
       <description>
