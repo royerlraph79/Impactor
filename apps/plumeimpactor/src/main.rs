@@ -57,13 +57,13 @@ fn main() -> iced::Result {
     // We're going to try and try running the iced_daemon with different
     // environment variables so it can run properly
     // RE: https://github.com/claration/Impactor/issues/103, https://github.com/claration/Impactor/issues/90
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     check_gpu();
 
     run_daemon()
 }
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[cfg(target_os = "linux")]
 fn check_gpu() {
     let instance = wgpu::Instance::default();
 
