@@ -43,6 +43,8 @@ pub enum Message {
     TrayIconClicked,
     #[cfg(target_os = "linux")]
     GtkTick,
+    #[cfg(target_os = "macos")]
+    MacOsActivationTick,
 
     // Refresh operations
     RefreshAppNow {
@@ -56,6 +58,7 @@ pub enum Message {
     UpdateTrayMenu,
 
     // Window management
+    RelaunchRequested,
     ShowWindow,
     HideWindow,
     Quit,
@@ -115,6 +118,8 @@ impl Impactor {
             let (id, open_task) = window::open(defaults::default_window_settings());
             (Some(id), open_task.discard())
         };
+        crate::macos_app::set_main_window_visible(main_window.is_some());
+        crate::macos_app::reset_activation_state();
 
         (
             Self {
@@ -292,7 +297,23 @@ impl Impactor {
                 while gtk::glib::MainContext::default().iteration(false) {}
                 Task::none()
             }
+            #[cfg(target_os = "macos")]
+            Message::MacOsActivationTick => {
+                if self.main_window.is_none() && crate::macos_app::activation_reopen_requested() {
+                    Task::done(Message::RelaunchRequested)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::RelaunchRequested => {
+                if self.main_window.is_none() {
+                    Task::done(Message::ShowWindow)
+                } else {
+                    Task::none()
+                }
+            }
             Message::ShowWindow => {
+                crate::macos_app::set_main_window_visible(true);
                 if let Some(id) = self.main_window {
                     window::gain_focus(id)
                 } else {
@@ -304,6 +325,7 @@ impl Impactor {
             Message::HideWindow => {
                 if let Some(id) = self.main_window {
                     self.main_window = None;
+                    crate::macos_app::set_main_window_visible(false);
                     window::close(id)
                 } else {
                     Task::none()
@@ -700,6 +722,7 @@ impl Impactor {
             };
 
         let tray_menu_refresh_subscription = subscriptions::tray_menu_refresh_subscription();
+        let relaunch_subscription = subscriptions::relaunch_subscription();
 
         let close_subscription = iced::event::listen_with(|event, _status, _id| {
             if let iced::Event::Window(window::Event::CloseRequested) = event {
@@ -714,6 +737,7 @@ impl Impactor {
             hover_subscription,
             progress_subscription,
             tray_menu_refresh_subscription,
+            relaunch_subscription,
             close_subscription,
         ])
     }
