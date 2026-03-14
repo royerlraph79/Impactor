@@ -35,6 +35,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   BINARY_NAME: plumeimpactor
   BINARY_NAME_CLI: plumesign
   BUNDLE_NAME: Impactor
@@ -53,7 +54,7 @@ jobs:
             arch: aarch64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -99,7 +100,7 @@ jobs:
             runner: windows-11-arm
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -144,10 +145,10 @@ jobs:
         arch: [x86_64, x86, arm64]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download Windows Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist
@@ -175,7 +176,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -247,7 +248,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -320,10 +321,10 @@ jobs:
     needs: build-macos-slice-arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get ARM slice
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-arm
           path: dist/slices
@@ -407,10 +408,10 @@ jobs:
     needs: build-macos-slice-intel
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get Intel slice
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-intel
           path: dist/slices
@@ -501,7 +502,7 @@ jobs:
       - build-macos-intel
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract version
         id: version
@@ -533,70 +534,70 @@ jobs:
 
       - name: Download Linux x86_64 artifact
         if: ${{ needs.build-linux.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-linux-x86_64
           path: prepare/
 
       - name: Download Linux aarch64 artifact
         if: ${{ needs.build-linux.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-linux-aarch64
           path: prepare/
 
       - name: Download Windows x86_64 artifact
         if: ${{ needs.build-windows.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-x86_64
           path: prepare/
 
       - name: Download Windows x86 artifact
         if: ${{ needs.build-windows.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-x86
           path: prepare/
 
       - name: Download Windows arm64 artifact
         if: ${{ needs.build-windows.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-arm64
           path: prepare/
 
       - name: Download Windows x86_64 installer
         if: ${{ needs.build-windows-installer.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-x86_64
           path: prepare/
 
       - name: Download Windows x86 installer
         if: ${{ needs.build-windows-installer.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-x86
           path: prepare/
 
       - name: Download Windows arm64 installer
         if: ${{ needs.build-windows-installer.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-arm64
           path: prepare/
 
       - name: Download macOS ARM64 artifact
         if: ${{ needs.build-macos-arm64.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-arm64
           path: prepare/
 
       - name: Download macOS Intel artifact
         if: ${{ needs.build-macos-intel.result == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-intel
           path: prepare/
@@ -632,7 +633,7 @@ jobs:
           fi
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.3.0
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.name }}
