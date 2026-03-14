@@ -3,8 +3,32 @@ name: Release
 on:
   push:
     tags:
-      - v*
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      build_linux:
+        description: Build Linux
+        type: boolean
+        required: true
+        default: true
+      build_windows:
+        description: Build Windows
+        type: boolean
+        required: true
+        default: true
+      build_macos:
+        description: Build macOS
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   BINARY_NAME: plumeimpactor
   BINARY_NAME_CLI: plumesign
@@ -12,6 +36,7 @@ env:
 
 jobs:
   build-linux:
+    if: ${{ github.event_name == 'push' || inputs.build_linux }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -21,12 +46,17 @@ jobs:
             arch: x86_64
           - os: ubuntu-24.04-arm
             arch: aarch64
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
+
       - name: Use Wild linker
         uses: davidlattimore/wild-action@latest
+
       - uses: snok/install-poetry@v1
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
@@ -38,8 +68,7 @@ jobs:
           version: 1.0
 
       - name: Build binaries
-        run: |
-          make linux PROFILE=release APPIMAGE=1
+        run: make linux PROFILE=release APPIMAGE=1
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -48,8 +77,10 @@ jobs:
           path: dist/*
 
   build-windows:
+    if: ${{ github.event_name == 'push' || inputs.build_windows }}
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: true
       matrix:
         include:
           - target: x86_64-pc-windows-gnu
@@ -61,20 +92,22 @@ jobs:
           - target: aarch64-pc-windows-msvc
             arch: arm64
             runner: windows-11-arm
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Install mingw-w64 (x86_64/x86)
-        if: matrix.arch == 'x86_64' || matrix.arch == 'x86'
+        if: ${{ matrix.arch == 'x86_64' || matrix.arch == 'x86' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y mingw-w64
 
       - name: Build binaries (Linux cross-compile)
-        if: matrix.arch != 'arm64'
+        if: ${{ matrix.arch != 'arm64' }}
         run: |
           cargo build --bins --workspace --release --target ${{ matrix.target }}
           mkdir -p dist
@@ -82,26 +115,29 @@ jobs:
           cp target/${{ matrix.target }}/release/plumesign.exe dist/plumesign-windows-${{ matrix.arch }}.exe
 
       - name: Build binaries (Windows ARM64 native)
-        if: matrix.arch == 'arm64'
+        if: ${{ matrix.arch == 'arm64' }}
         shell: pwsh
         run: |
           cargo build --bins --workspace --release --target ${{ matrix.target }}
-          New-Item -ItemType Directory -Force -Path dist
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/plumeimpactor.exe" "dist/Impactor-windows-${{ matrix.arch }}-portable.exe"
           Copy-Item "target/${{ matrix.target }}/release/plumesign.exe" "dist/plumesign-windows-${{ matrix.arch }}.exe"
 
-      - name: Upload Bundles
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist/*.exe
 
   build-windows-installer:
+    if: ${{ github.event_name == 'push' || inputs.build_windows }}
     runs-on: windows-latest
-    needs: [build-windows]
+    needs: build-windows
     strategy:
+      fail-fast: true
       matrix:
         arch: [x86_64, x86, arm64]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -112,9 +148,10 @@ jobs:
           path: dist
 
       - name: Install NSIS
-        run: choco install nsis.portable
+        run: choco install nsis.portable -y
 
       - name: Build NSIS Installer
+        shell: cmd
         run: |
           mkdir dist\nsis
           copy package\windows\* dist\nsis\
@@ -122,15 +159,17 @@ jobs:
           makensis dist\nsis\installer.nsi
           move dist\nsis\installer.exe dist\Impactor-windows-${{ matrix.arch }}-setup.exe
 
-      - name: Upload Installer
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-${{ matrix.arch }}
           path: dist/Impactor-windows-${{ matrix.arch }}-setup.exe
 
   build-macos-slices:
+    if: ${{ github.event_name == 'push' || inputs.build_macos }}
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: true
       matrix:
         include:
           - target: aarch64-apple-darwin
@@ -141,31 +180,40 @@ jobs:
             arch: intel
             suffix: x86_64
             osxcross_prefix: x86_64-apple-darwin21.4
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
       - name: Setup osxcross
         uses: Timmmm/setup-osxcross@v3
         with:
           osx-version: "12.3"
 
       - name: Build binaries (${{ matrix.arch }})
+        shell: bash
         run: |
+          set -euo pipefail
+
           target_env=$(echo "${{ matrix.target }}" | tr '-' '_')
           target_env_upper=$(echo "${target_env}" | tr '[:lower:]' '[:upper:]')
           prefix="${{ matrix.osxcross_prefix }}"
           osxcross_bin="$(dirname "$(command -v "${prefix}-clang")")"
           osxcross_root="$(cd "${osxcross_bin}/.." && pwd)"
           sdk_dir="${osxcross_root}/SDK"
+
           if [ -d "${sdk_dir}" ]; then
-            sdkroot="$(ls -d "${sdk_dir}"/MacOSX*.sdk 2>/dev/null | sort -V | tail -n1)"
+            sdkroot="$(ls -d "${sdk_dir}"/MacOSX*.sdk 2>/dev/null | sort -V | tail -n1 || true)"
             if [ -n "${sdkroot}" ]; then
               export SDKROOT="${sdkroot}"
             fi
           fi
+
           export MACOSX_DEPLOYMENT_TARGET="11.0"
+
           ld_path=""
           for name in "${prefix}-ld" "${prefix}-ld64" "ld64" "ld"; do
             if [ -x "${osxcross_bin}/${name}" ]; then
@@ -173,88 +221,98 @@ jobs:
               break
             fi
           done
+
           export "CC_${target_env}=${osxcross_bin}/${prefix}-clang"
           export "CXX_${target_env}=${osxcross_bin}/${prefix}-clang++"
           export "AR_${target_env}=${osxcross_bin}/${prefix}-ar"
           export "RANLIB_${target_env}=${osxcross_bin}/${prefix}-ranlib"
           export "CARGO_TARGET_${target_env_upper}_LINKER=${osxcross_bin}/${prefix}-clang"
+
           if [ -n "${ld_path}" ]; then
             export "CFLAGS_${target_env}=-fuse-ld=${ld_path}"
             export "CXXFLAGS_${target_env}=-fuse-ld=${ld_path}"
             export "LDFLAGS_${target_env}=-fuse-ld=${ld_path}"
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-fuse-ld=${ld_path}"
           fi
+
           cargo build --bins --workspace --release --target ${{ matrix.target }}
+
           mkdir -p dist
           cp target/${{ matrix.target }}/release/plumeimpactor dist/plumeimpactor-macos-${{ matrix.suffix }}
           cp target/${{ matrix.target }}/release/plumesign dist/plumesign-macos-${{ matrix.suffix }}
 
-      - name: Upload ${{ matrix.arch }} Slice
+      - name: Upload ${{ matrix.arch }} slice
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-${{ matrix.arch }}
           path: dist/*
 
   build-macos-universal:
+    if: ${{ github.event_name == 'push' || inputs.build_macos }}
     runs-on: macos-latest
-    needs: [build-macos-slices]
+    needs: build-macos-slices
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get ARM Slice
+      - name: Get ARM slice
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-arm
           path: dist/slices
 
-      - name: Get Intel Slice
+      - name: Get Intel slice
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-intel
           path: dist/slices
 
-      - name: Setup Certificates
+      - name: Setup certificates
         uses: apple-actions/import-codesign-certs@v5
         with:
           p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
           p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
 
-      - name: Download CreateDMG
-        run: |
-          brew install create-dmg
+      - name: Install create-dmg
+        run: brew install create-dmg
 
-      - name: Create Universal Binary
+      - name: Create universal binaries
         run: |
           make macos BIN1=dist/slices/${{ env.BINARY_NAME }}-macos-arm64 BIN2=dist/slices/${{ env.BINARY_NAME }}-macos-x86_64 BUNDLE=1 ARCH=universal
           make macos BIN1=dist/slices/${{ env.BINARY_NAME_CLI }}-macos-arm64 BIN2=dist/slices/${{ env.BINARY_NAME_CLI }}-macos-x86_64 ARCH=universal
 
-      - name: Codesign
+      - name: Codesign app
         run: |
           mkdir -p dist/dmg
           mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg/
           codesign --deep --force --options runtime \
-            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/dmg/${{ env.BUNDLE_NAME }}.app
+            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
+            dist/dmg/${{ env.BUNDLE_NAME }}.app
 
       - name: Create DMG
         run: |
-          mkdir -p dist/out
           create-dmg \
-            --volname ${{ env.BUNDLE_NAME }} \
+            --volname "${{ env.BUNDLE_NAME }}" \
             --background "package/macos/background.png" \
             --window-pos 200 120 \
             --window-size 510 350 \
             --icon-size 100 \
-            --icon ${{ env.BUNDLE_NAME }}.app 160 155 \
+            --icon "${{ env.BUNDLE_NAME }}.app" 160 155 \
             --hide-extension "${{ env.BUNDLE_NAME }}.app" \
             --app-drop-link 350 155 \
-            dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg dist/dmg
+            "dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg" \
+            dist/dmg
 
       - name: Notarize DMG
         run: |
-          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
-          xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg
+          xcrun notarytool submit "dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg" \
+            --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_ID_TEAM }}" \
+            --wait
+          xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg"
 
-      - name: Upload Universal DMG
+      - name: Upload universal DMG
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-universal
@@ -263,89 +321,151 @@ jobs:
             dist/${{ env.BINARY_NAME_CLI }}-macos-universal
 
   release:
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
-    needs: [build-linux, build-windows-installer, build-macos-universal]
+    needs:
+      - build-linux
+      - build-windows
+      - build-windows-installer
+      - build-macos-slices
+      - build-macos-universal
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Linux x86_64 Artifact
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(awk '/\[workspace.package\]/,/^$/' Cargo.toml | sed -nE 's/version *= *"([^"]*)".*/\1/p' | head -n1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            NAME="${TAG}"
+            PRERELEASE=false
+          else
+            TAG="manual-v${{ steps.version.outputs.version }}-${GITHUB_RUN_NUMBER}"
+            NAME="${TAG}"
+            PRERELEASE=true
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux x86_64 artifact
+        if: ${{ needs.build-linux.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-linux-x86_64
           path: prepare/
 
-      - name: Download Linux aarch64 Artifact
+      - name: Download Linux aarch64 artifact
+        if: ${{ needs.build-linux.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-linux-aarch64
           path: prepare/
 
-      - name: Download Windows x86_64 Artifact
+      - name: Download Windows x86_64 artifact
+        if: ${{ needs.build-windows.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-x86_64
           path: prepare/
 
-      - name: Download Windows x86_64 Installer Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-windows-installer-x86_64
-          path: prepare/
-
-      - name: Download Windows arm64 Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-windows-arm64
-          path: prepare/
-
-      - name: Download Windows arm64 Installer Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.BINARY_NAME }}-windows-installer-arm64
-          path: prepare/
-
-      - name: Download Windows x86 Artifact
+      - name: Download Windows x86 artifact
+        if: ${{ needs.build-windows.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-x86
           path: prepare/
 
-      - name: Download Windows x86 Installer Artifact
+      - name: Download Windows arm64 artifact
+        if: ${{ needs.build-windows.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-windows-arm64
+          path: prepare/
+
+      - name: Download Windows x86_64 installer
+        if: ${{ needs.build-windows-installer.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-windows-installer-x86_64
+          path: prepare/
+
+      - name: Download Windows x86 installer
+        if: ${{ needs.build-windows-installer.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-x86
           path: prepare/
 
-      - name: Download MacOS Universal Artifact
+      - name: Download Windows arm64 installer
+        if: ${{ needs.build-windows-installer.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-windows-installer-arm64
+          path: prepare/
+
+      - name: Download macOS universal artifact
+        if: ${{ needs.build-macos-universal.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-universal
           path: prepare/
 
-      - name: Prepare Uploads
+      - name: Prepare uploads
+        id: uploads
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p upload
-          shopt -s globstar
-          mv prepare/**/*.dmg upload/
-          mv prepare/**/*.appimage upload/
-          mv prepare/**/*.exe upload/
-          mv prepare/**/plumesign* upload/
+          shopt -s globstar nullglob
 
-      - name: Extract Version
-        id: get_version
-        run: |
-          VERSION=$(awk '/\[workspace.package\]/,/^$/' Cargo.toml | sed -nE 's/version *= *"([^"]*)".*/\1/p')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          files=(
+            prepare/**/*.dmg
+            prepare/**/*.appimage
+            prepare/**/*.exe
+            prepare/**/plumesign*
+          )
 
-      - name: Create Release
+          count=0
+          for f in "${files[@]}"; do
+            if [ -e "$f" ]; then
+              mv "$f" upload/
+              count=$((count + 1))
+            fi
+          done
+
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          ls -la upload || true
+
+          if [ "$count" -eq 0 ]; then
+            echo "No artifacts found to release."
+            exit 1
+          fi
+
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: v${{ steps.get_version.outputs.version }}
-          tag_name: v${{ steps.get_version.outputs.version }}
-          files: |
-            upload/*
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
           generate_release_notes: true
+          files: upload/*
           fail_on_unmatched_files: true
-          draft: true
         env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
