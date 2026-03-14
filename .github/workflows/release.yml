@@ -16,8 +16,13 @@ on:
         type: boolean
         required: true
         default: true
-      build_macos:
-        description: Build macOS
+      build_macos_arm64:
+        description: Build macOS Silicon / ARM64
+        type: boolean
+        required: true
+        default: true
+      build_macos_intel:
+        description: Build macOS Intel
         type: boolean
         required: true
         default: true
@@ -166,7 +171,7 @@ jobs:
           path: dist/Impactor-windows-${{ matrix.arch }}-setup.exe
 
   build-macos-slices:
-    if: ${{ github.event_name == 'push' || inputs.build_macos }}
+    if: ${{ github.event_name == 'push' || inputs.build_macos_arm64 || inputs.build_macos_intel }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
@@ -194,6 +199,7 @@ jobs:
           osx-version: "12.3"
 
       - name: Build binaries (${{ matrix.arch }})
+        if: ${{ github.event_name == 'push' || (matrix.arch == 'arm' && inputs.build_macos_arm64) || (matrix.arch == 'intel' && inputs.build_macos_intel) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -242,13 +248,14 @@ jobs:
           cp target/${{ matrix.target }}/release/plumesign dist/plumesign-macos-${{ matrix.suffix }}
 
       - name: Upload ${{ matrix.arch }} slice
+        if: ${{ github.event_name == 'push' || (matrix.arch == 'arm' && inputs.build_macos_arm64) || (matrix.arch == 'intel' && inputs.build_macos_intel) }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-${{ matrix.arch }}
           path: dist/*
 
-  build-macos-universal:
-    if: ${{ github.event_name == 'push' || inputs.build_macos }}
+  build-macos-arm64:
+    if: ${{ github.event_name == 'push' || inputs.build_macos_arm64 }}
     runs-on: macos-latest
     needs: build-macos-slices
 
@@ -260,6 +267,69 @@ jobs:
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-arm
           path: dist/slices
+
+      - name: Setup certificates
+        uses: apple-actions/import-codesign-certs@v5
+        with:
+          p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
+          p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create ARM64 bundle and CLI
+        run: |
+          cp dist/slices/${{ env.BINARY_NAME }}-macos-arm64 dist/${{ env.BINARY_NAME }}-macos-arm64
+          cp dist/slices/${{ env.BINARY_NAME_CLI }}-macos-arm64 dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
+          make macos BIN=dist/${{ env.BINARY_NAME }}-macos-arm64 BUNDLE=1 ARCH=arm64
+          cp dist/${{ env.BINARY_NAME_CLI }}-macos-arm64 dist/${{ env.BINARY_NAME_CLI }}-macos-arm64-final
+
+      - name: Codesign app
+        run: |
+          mkdir -p dist/dmg-arm64
+          mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg-arm64/
+          codesign --deep --force --options runtime \
+            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
+            dist/dmg-arm64/${{ env.BUNDLE_NAME }}.app
+
+      - name: Create ARM64 DMG
+        run: |
+          create-dmg \
+            --volname "${{ env.BUNDLE_NAME }}" \
+            --background "package/macos/background.png" \
+            --window-pos 200 120 \
+            --window-size 510 350 \
+            --icon-size 100 \
+            --icon "${{ env.BUNDLE_NAME }}.app" 160 155 \
+            --hide-extension "${{ env.BUNDLE_NAME }}.app" \
+            --app-drop-link 350 155 \
+            "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg" \
+            dist/dmg-arm64
+
+      - name: Notarize ARM64 DMG
+        run: |
+          xcrun notarytool submit "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg" \
+            --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_ID_TEAM }}" \
+            --wait
+          xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg"
+
+      - name: Upload ARM64 DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-macos-arm64
+          path: |
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
+            dist/${{ env.BINARY_NAME_CLI }}-macos-arm64-final
+
+  build-macos-intel:
+    if: ${{ github.event_name == 'push' || inputs.build_macos_intel }}
+    runs-on: macos-latest
+    needs: build-macos-slices
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Get Intel slice
         uses: actions/download-artifact@v4
@@ -276,20 +346,21 @@ jobs:
       - name: Install create-dmg
         run: brew install create-dmg
 
-      - name: Create universal binaries
+      - name: Create Intel bundle and CLI
         run: |
-          make macos BIN1=dist/slices/${{ env.BINARY_NAME }}-macos-arm64 BIN2=dist/slices/${{ env.BINARY_NAME }}-macos-x86_64 BUNDLE=1 ARCH=universal
-          make macos BIN1=dist/slices/${{ env.BINARY_NAME_CLI }}-macos-arm64 BIN2=dist/slices/${{ env.BINARY_NAME_CLI }}-macos-x86_64 ARCH=universal
+          cp dist/slices/${{ env.BINARY_NAME }}-macos-x86_64 dist/${{ env.BINARY_NAME }}-macos-x86_64
+          cp dist/slices/${{ env.BINARY_NAME_CLI }}-macos-x86_64 dist/${{ env.BINARY_NAME_CLI }}-macos-x86_64-final
+          make macos BIN=dist/${{ env.BINARY_NAME }}-macos-x86_64 BUNDLE=1 ARCH=x86_64
 
       - name: Codesign app
         run: |
-          mkdir -p dist/dmg
-          mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg/
+          mkdir -p dist/dmg-intel
+          mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg-intel/
           codesign --deep --force --options runtime \
             --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
-            dist/dmg/${{ env.BUNDLE_NAME }}.app
+            dist/dmg-intel/${{ env.BUNDLE_NAME }}.app
 
-      - name: Create DMG
+      - name: Create Intel DMG
         run: |
           create-dmg \
             --volname "${{ env.BUNDLE_NAME }}" \
@@ -300,25 +371,25 @@ jobs:
             --icon "${{ env.BUNDLE_NAME }}.app" 160 155 \
             --hide-extension "${{ env.BUNDLE_NAME }}.app" \
             --app-drop-link 350 155 \
-            "dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg" \
-            dist/dmg
+            "dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg" \
+            dist/dmg-intel
 
-      - name: Notarize DMG
+      - name: Notarize Intel DMG
         run: |
-          xcrun notarytool submit "dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg" \
+          xcrun notarytool submit "dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg" \
             --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
             --password "${{ secrets.APPLE_ID_PASSWORD }}" \
             --team-id "${{ secrets.APPLE_ID_TEAM }}" \
             --wait
-          xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg"
+          xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg"
 
-      - name: Upload universal DMG
+      - name: Upload Intel DMG
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.BINARY_NAME }}-macos-universal
+          name: ${{ env.BINARY_NAME }}-macos-intel
           path: |
-            dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg
-            dist/${{ env.BINARY_NAME_CLI }}-macos-universal
+            dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg
+            dist/${{ env.BINARY_NAME_CLI }}-macos-x86_64-final
 
   release:
     if: ${{ always() }}
@@ -328,7 +399,8 @@ jobs:
       - build-windows
       - build-windows-installer
       - build-macos-slices
-      - build-macos-universal
+      - build-macos-arm64
+      - build-macos-intel
 
     steps:
       - uses: actions/checkout@v4
@@ -417,15 +489,21 @@ jobs:
           name: ${{ env.BINARY_NAME }}-windows-installer-arm64
           path: prepare/
 
-      - name: Download macOS universal artifact
-        if: ${{ needs.build-macos-universal.result == 'success' }}
+      - name: Download macOS ARM64 artifact
+        if: ${{ needs.build-macos-arm64.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.BINARY_NAME }}-macos-universal
+          name: ${{ env.BINARY_NAME }}-macos-arm64
+          path: prepare/
+
+      - name: Download macOS Intel artifact
+        if: ${{ needs.build-macos-intel.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-macos-intel
           path: prepare/
 
       - name: Prepare uploads
-        id: uploads
         shell: bash
         run: |
           set -euo pipefail
@@ -448,7 +526,6 @@ jobs:
             fi
           done
 
-          echo "count=$count" >> "$GITHUB_OUTPUT"
           ls -la upload || true
 
           if [ "$count" -eq 0 ]; then
