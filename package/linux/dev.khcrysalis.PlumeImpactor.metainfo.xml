@@ -44,6 +44,19 @@
     <color type="primary" scheme_preference="dark">#a6415b</color>
   </branding>
   <releases>
+    <release version="v2.1.2" date="2026-03-20">
+      <url type="details">https://github.com/CLARATION/Impactor/releases/tag/v2.1.2</url>
+      <description>
+        <p>What's Changed</p>
+        <ul>
+          <li>On macOS, the app icon now displays in the dock when a window is opened by @se2crid </li>
+          <li>Added Windows arm &amp; x86 support by @sadan4 </li>
+          <li>Added StikStore integration.</li>
+          <li>Fixed signing with large enterprise accounts by @EinTim23 </li>
+          <li>Fixed anisette not working correctly on new logins by switching providers.</li>
+        </ul>
+      </description>
+    </release>
     <release version="v2.1.1" date="2026-02-24">
       <url type="details">https://github.com/claration/Impactor/releases/tag/v2.1.1</url>
       <description>
