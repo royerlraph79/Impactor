@@ -86,20 +86,30 @@ impl GeneralScreen {
         .spacing(10)
         .align_x(Center);
 
-        let footer_links = button(appearance::icon_text(
-            appearance::STAR,
-            "Star us on GitHub!",
-            Some(Color::from_rgb(1.0, 0.75, 0.8)),
-        ))
-        .on_press(Message::OpenGitHub)
-        .style(iced::widget::button::text);
+        let show_star_prompt = false;
 
-        column![
-            container(screen_content).center(Fill).height(Fill),
-            container(footer_links).width(Fill),
-            self.view_buttons()
-        ]
-        .into()
+        let content = if show_star_prompt {
+            let footer_links = button(appearance::icon_text(
+                appearance::STAR,
+                "Star us on GitHub!",
+                Some(Color::from_rgb(1.0, 0.75, 0.8)),
+            ))
+            .on_press(Message::OpenGitHub)
+            .style(iced::widget::button::text);
+
+            column![
+                container(screen_content).center(Fill).height(Fill),
+                container(footer_links).width(Fill),
+                self.view_buttons()
+            ]
+        } else {
+            column![
+                container(screen_content).center(Fill).height(Fill),
+                self.view_buttons()
+            ]
+        };
+
+        content.into()
     }
 
     fn view_buttons(&self) -> Element<'_, Message> {
