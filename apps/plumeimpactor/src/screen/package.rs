@@ -215,7 +215,7 @@ impl PackageScreen {
             }
             Message::SetCustomEntitlements => {
                 let path = rfd::FileDialog::new()
-                    .add_filter("Entitlements plist", &["plist", "xml"])
+                    .add_filter("Entitlements plist", &["plist", "xml", "entitlements"])
                     .set_title("Select Entitlements File")
                     .pick_file();
 
