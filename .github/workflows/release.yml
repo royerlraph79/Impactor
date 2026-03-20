@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       build_linux:
@@ -81,6 +81,7 @@ jobs:
         with:
           name: ${{ env.BINARY_NAME }}-linux-${{ matrix.arch }}
           path: dist/*
+          if-no-files-found: error
 
   build-windows:
     if: ${{ github.event_name == 'push' || inputs.build_windows }}
@@ -115,6 +116,7 @@ jobs:
       - name: Build binaries (Linux cross-compile)
         if: ${{ matrix.arch != 'arm64' }}
         run: |
+          set -euo pipefail
           cargo build --bins --workspace --release --target ${{ matrix.target }}
           mkdir -p dist
           cp target/${{ matrix.target }}/release/plumeimpactor.exe dist/Impactor-windows-${{ matrix.arch }}-portable.exe
@@ -124,7 +126,8 @@ jobs:
         if: ${{ matrix.arch == 'arm64' }}
         shell: pwsh
         run: |
-          cargo build --bins --workspace --release --target ${{ matrix.target }}
+          $ErrorActionPreference = "Stop"
+          cargo build --bins --workspace --release --target "${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/plumeimpactor.exe" "dist/Impactor-windows-${{ matrix.arch }}-portable.exe"
           Copy-Item "target/${{ matrix.target }}/release/plumesign.exe" "dist/plumesign-windows-${{ matrix.arch }}.exe"
@@ -134,6 +137,7 @@ jobs:
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist/*.exe
+          if-no-files-found: error
 
   build-windows-installer:
     if: ${{ github.event_name == 'push' || inputs.build_windows }}
@@ -170,6 +174,7 @@ jobs:
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-${{ matrix.arch }}
           path: dist/Impactor-windows-${{ matrix.arch }}-setup.exe
+          if-no-files-found: error
 
   build-macos-slice-arm64:
     if: ${{ github.event_name == 'push' || inputs.build_macos_arm64 }}
@@ -242,6 +247,7 @@ jobs:
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-arm
           path: dist/*
+          if-no-files-found: error
 
   build-macos-slice-intel:
     if: ${{ github.event_name == 'push' || inputs.build_macos_intel }}
@@ -314,6 +320,7 @@ jobs:
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-intel
           path: dist/*
+          if-no-files-found: error
 
   build-macos-arm64:
     if: ${{ github.event_name == 'push' || inputs.build_macos_arm64 }}
@@ -401,6 +408,7 @@ jobs:
           path: |
             dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
             dist/plumesign-macos-arm64
+          if-no-files-found: error
 
   build-macos-intel:
     if: ${{ github.event_name == 'push' || inputs.build_macos_intel }}
@@ -488,9 +496,9 @@ jobs:
           path: |
             dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg
             dist/plumesign-macos-x86_64
+          if-no-files-found: error
 
   release:
-    if: ${{ always() }}
     runs-on: ubuntu-24.04
     needs:
       - build-linux
@@ -500,6 +508,7 @@ jobs:
       - build-macos-slice-intel
       - build-macos-arm64
       - build-macos-intel
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
 
     steps:
       - uses: actions/checkout@v5
@@ -608,26 +617,19 @@ jobs:
           set -euo pipefail
 
           mkdir -p upload
-          shopt -s globstar nullglob
 
-          files=(
-            prepare/**/*.dmg
-            prepare/**/*.appimage
-            prepare/**/*.exe
-            prepare/**/plumesign*
-          )
+          find prepare -type f \
+            \( \
+              -iname '*.dmg' -o \
+              -iname '*.appimage' -o \
+              -iname '*.exe' -o \
+              -iname 'plumesign*' \
+            \) \
+            -exec mv -t upload {} +
 
-          count=0
-          for f in "${files[@]}"; do
-            if [ -e "$f" ]; then
-              mv "$f" upload/
-              count=$((count + 1))
-            fi
-          done
+          ls -la upload
 
-          ls -la upload || true
-
-          if [ "$count" -eq 0 ]; then
+          if ! find upload -maxdepth 1 -type f | grep -q .; then
             echo "No artifacts found to release."
             exit 1
           fi
