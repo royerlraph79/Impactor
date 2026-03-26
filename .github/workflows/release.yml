@@ -401,13 +401,18 @@ jobs:
             --wait
           xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg"
 
-      - name: Upload ARM64 artifact
+      - name: Upload ARM64 DMG artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ env.BINARY_NAME }}-macos-arm64
-          path: |
-            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
-            dist/plumesign-macos-arm64
+          name: Impactor-macos-arm64.dmg
+          path: dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
+          if-no-files-found: error
+
+      - name: Upload ARM64 plumesign artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: plumesign-macos-arm64
+          path: dist/plumesign-macos-arm64
           if-no-files-found: error
 
   build-macos-intel:
@@ -489,13 +494,18 @@ jobs:
             --wait
           xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg"
 
-      - name: Upload Intel artifact
+      - name: Upload Intel DMG artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ env.BINARY_NAME }}-macos-intel
-          path: |
-            dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg
-            dist/plumesign-macos-x86_64
+          name: Impactor-macos-x86_64.dmg
+          path: dist/${{ env.BUNDLE_NAME }}-macos-x86_64.dmg
+          if-no-files-found: error
+
+      - name: Upload Intel plumesign artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: plumesign-macos-x86_64
+          path: dist/plumesign-macos-x86_64
           if-no-files-found: error
 
   release:
@@ -597,18 +607,32 @@ jobs:
           name: ${{ env.BINARY_NAME }}-windows-installer-arm64
           path: prepare/
 
-      - name: Download macOS ARM64 artifact
+      - name: Download macOS ARM64 DMG artifact
         if: ${{ needs.build-macos-arm64.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ env.BINARY_NAME }}-macos-arm64
+          name: Impactor-macos-arm64.dmg
           path: prepare/
 
-      - name: Download macOS Intel artifact
+      - name: Download macOS ARM64 plumesign artifact
+        if: ${{ needs.build-macos-arm64.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: plumesign-macos-arm64
+          path: prepare/
+
+      - name: Download macOS Intel DMG artifact
         if: ${{ needs.build-macos-intel.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: ${{ env.BINARY_NAME }}-macos-intel
+          name: Impactor-macos-x86_64.dmg
+          path: prepare/
+
+      - name: Download macOS Intel plumesign artifact
+        if: ${{ needs.build-macos-intel.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: plumesign-macos-x86_64
           path: prepare/
 
       - name: Prepare uploads
