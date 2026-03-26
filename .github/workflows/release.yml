@@ -188,7 +188,7 @@ jobs:
           targets: aarch64-apple-darwin
 
       - name: Setup osxcross
-        uses: royerlraph79/setup-osxcross@7203aab4d3291fd7a3f86974e5b0039db8edc834
+        uses: royerlraph79/setup-osxcross@a5516d5b01029e9b97d5e738664c49e7bc0fe43b
         with:
           osx-version: "12.3"
 
@@ -261,7 +261,7 @@ jobs:
           targets: x86_64-apple-darwin
 
       - name: Setup osxcross
-        uses: royerlraph79/setup-osxcross@7203aab4d3291fd7a3f86974e5b0039db8edc834
+        uses: royerlraph79/setup-osxcross@a5516d5b01029e9b97d5e738664c49e7bc0fe43b
         with:
           osx-version: "12.3"
 
