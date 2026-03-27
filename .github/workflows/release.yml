@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -415,6 +416,27 @@ jobs:
           path: dist/plumesign-macos-arm64
           if-no-files-found: error
 
+      - name: Delete ARM64 slice artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ${{ env.BINARY_NAME }}-macos-slice-arm
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          artifact_ids="$(gh api \
+            repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
+            --jq '.artifacts[] | select(.name == env.ARTIFACT_NAME) | .id')"
+
+          if [ -n "${artifact_ids}" ]; then
+            while IFS= read -r artifact_id; do
+              [ -n "${artifact_id}" ] || continue
+              gh api \
+                --method DELETE \
+                repos/${{ github.repository }}/actions/artifacts/${artifact_id}
+            done <<< "${artifact_ids}"
+          fi
+
   build-macos-intel:
     if: ${{ github.event_name == 'push' || inputs.build_macos_intel }}
     runs-on: macos-latest
@@ -507,6 +529,27 @@ jobs:
           name: plumesign-macos-x86_64
           path: dist/plumesign-macos-x86_64
           if-no-files-found: error
+
+      - name: Delete Intel slice artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ${{ env.BINARY_NAME }}-macos-slice-intel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          artifact_ids="$(gh api \
+            repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
+            --jq '.artifacts[] | select(.name == env.ARTIFACT_NAME) | .id')"
+
+          if [ -n "${artifact_ids}" ]; then
+            while IFS= read -r artifact_id; do
+              [ -n "${artifact_id}" ] || continue
+              gh api \
+                --method DELETE \
+                repos/${{ github.repository }}/actions/artifacts/${artifact_id}
+            done <<< "${artifact_ids}"
+          fi
 
   release:
     runs-on: ubuntu-24.04
