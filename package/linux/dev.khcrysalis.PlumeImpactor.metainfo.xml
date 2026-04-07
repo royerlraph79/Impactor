@@ -44,6 +44,15 @@
     <color type="primary" scheme_preference="dark">#a6415b</color>
   </branding>
   <releases>
+    <release version="v2.2.2" date="2026-04-07">
+      <url type="details">https://github.com/CLARATION/Impactor/releases/tag/v2.2.2</url>
+      <description>
+        <p>What's Changed</p>
+        <ul>
+          <li>Fixed issue where bundle folders were named `idevice.ipa.app` when uploading with AFC.</li>
+        </ul>
+      </description>
+    </release>
     <release version="v2.2.1" date="2026-04-07">
       <url type="details">https://github.com/CLARATION/Impactor/releases/tag/v2.2.1</url>
       <description>
