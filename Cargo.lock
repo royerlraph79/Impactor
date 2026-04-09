@@ -5601,7 +5601,7 @@ dependencies = [
 
 [[package]]
 name = "plume_core"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "aes 0.9.0-rc.4",
  "aes-gcm",
@@ -5637,11 +5637,11 @@ dependencies = [
 
 [[package]]
 name = "plume_gestalt"
-version = "2.2.2"
+version = "2.2.3"
 
 [[package]]
 name = "plume_store"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "chrono",
  "plume_core",
@@ -5652,7 +5652,7 @@ dependencies = [
 
 [[package]]
 name = "plume_utils"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "decompress",
  "flate2",
@@ -5672,7 +5672,7 @@ dependencies = [
 
 [[package]]
 name = "plumeimpactor"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "auto-launcher",
  "chrono",
@@ -5706,7 +5706,7 @@ dependencies = [
 
 [[package]]
 name = "plumesign"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "clap",
