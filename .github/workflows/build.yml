@@ -1,6 +1,40 @@
 name: "Build & Bundle"
+
 on:
   workflow_dispatch:
+    inputs:
+      release_linux_x86_64:
+        description: "Build Linux x86_64"
+        type: boolean
+        default: true
+      release_linux_aarch64:
+        description: "Build Linux aarch64"
+        type: boolean
+        default: true
+      release_windows_x86_64:
+        description: "Build Windows x86_64"
+        type: boolean
+        default: true
+      release_windows_x86:
+        description: "Build Windows x86"
+        type: boolean
+        default: true
+      release_windows_arm64:
+        description: "Build Windows arm64"
+        type: boolean
+        default: true
+      release_macos_universal:
+        description: "Build macOS universal"
+        type: boolean
+        default: true
+      release_macos_x86_64:
+        description: "Build macOS x86_64"
+        type: boolean
+        default: true
+      release_macos_arm64:
+        description: "Build macOS arm64"
+        type: boolean
+        default: true
 
 env:
   BINARY_NAME: plumeimpactor
@@ -9,6 +43,9 @@ env:
 
 jobs:
   build-linux:
+    if: >
+      (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+      (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -45,6 +82,10 @@ jobs:
           path: dist/*
 
   build-windows:
+    if: >
+      (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+      (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+      (matrix.arch == 'arm64' && inputs.release_windows_arm64)
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -94,6 +135,10 @@ jobs:
           path: dist/*.exe
 
   build-windows-installer:
+    if: >
+      (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+      (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+      (matrix.arch == 'arm64' && inputs.release_windows_arm64)
     runs-on: windows-latest
     needs: [build-windows]
     strategy:
@@ -126,6 +171,9 @@ jobs:
           path: dist/Impactor-windows-${{ matrix.arch }}-setup.exe
 
   build-macos-slices:
+    if: >
+      (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
+      (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -193,6 +241,7 @@ jobs:
           path: dist/*
 
   build-macos-universal:
+    if: inputs.release_macos_universal
     runs-on: macos-latest
     needs: [build-macos-slices]
     steps:
