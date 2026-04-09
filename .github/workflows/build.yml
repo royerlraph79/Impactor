@@ -345,7 +345,8 @@ jobs:
 
       - name: Create ARM64 App Bundle
         run: |
-          make macos BIN=dist/slices/${{ env.BINARY_NAME }}-macos-arm64 BUNDLE=1 ARCH=arm64
+          cp dist/slices/${{ env.BINARY_NAME }}-macos-arm64 dist/${{ env.BINARY_NAME }}-macos-arm64
+          make macos BIN1=dist/${{ env.BINARY_NAME }}-macos-arm64 BUNDLE=1 ARCH=arm64
 
       - name: Codesign ARM64 App
         run: |
