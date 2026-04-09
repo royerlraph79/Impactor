@@ -46,10 +46,6 @@ env:
 
 jobs:
   build-linux:
-    if: >
-      github.event_name != 'workflow_dispatch' ||
-      (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
-      (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -61,36 +57,67 @@ jobs:
             arch: aarch64
     steps:
       - uses: actions/checkout@v4
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
+
       - uses: dtolnay/rust-toolchain@stable
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
+
       - name: Use Wild linker
         uses: davidlattimore/wild-action@latest
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
+
       - uses: snok/install-poetry@v1
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
+
       - uses: actions/setup-python@v6
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
         with:
           python-version: "3.14"
 
       - name: Install and cache apt pkgs
         uses: awalsh128/cache-apt-pkgs-action@latest
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
         with:
           packages: flatpak flatpak-builder libglib2.0-dev libsecret-1-dev libgtk-3-dev libpng-dev libjpeg-dev libgl1-mesa-dev libglu1-mesa-dev libxkbcommon-dev libexpat1-dev libtiff-dev libxdo-dev libappindicator3-dev
           version: 1.0
 
       - name: Build binaries
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
         run: |
           make linux PROFILE=release APPIMAGE=1
 
       - name: Upload binaries
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
+          (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-linux-${{ matrix.arch }}
           path: dist/*
 
   build-windows:
-    if: >
-      github.event_name != 'workflow_dispatch' ||
-      (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
-      (matrix.arch == 'x86' && inputs.release_windows_x86) ||
-      (matrix.arch == 'arm64' && inputs.release_windows_arm64)
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -106,18 +133,38 @@ jobs:
             runner: windows-11-arm
     steps:
       - uses: actions/checkout@v4
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
+
       - uses: dtolnay/rust-toolchain@stable
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
         with:
           targets: ${{ matrix.target }}
 
       - name: Install mingw-w64 (x86_64/x86)
-        if: matrix.arch == 'x86_64' || matrix.arch == 'x86'
+        if: >
+          (github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86)) &&
+          (matrix.arch == 'x86_64' || matrix.arch == 'x86')
         run: |
           sudo apt-get update
           sudo apt-get install -y mingw-w64 nasm
 
       - name: Build binaries (Linux cross-compile)
-        if: matrix.arch != 'arm64'
+        if: >
+          (github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)) &&
+          matrix.arch != 'arm64'
         run: |
           cargo build --bins --workspace --release --target ${{ matrix.target }}
           mkdir -p dist
@@ -125,7 +172,12 @@ jobs:
           cp target/${{ matrix.target }}/release/plumesign.exe dist/plumesign-windows-${{ matrix.arch }}.exe
 
       - name: Build binaries (Windows ARM64 native)
-        if: matrix.arch == 'arm64'
+        if: >
+          (github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)) &&
+          matrix.arch == 'arm64'
         shell: pwsh
         run: |
           cargo build --bins --workspace --release --target ${{ matrix.target }}
@@ -134,17 +186,17 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/plumesign.exe" "dist/plumesign-windows-${{ matrix.arch }}.exe"
 
       - name: Upload Bundles
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist/*.exe
 
   build-windows-installer:
-    if: >
-      github.event_name != 'workflow_dispatch' ||
-      (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
-      (matrix.arch == 'x86' && inputs.release_windows_x86) ||
-      (matrix.arch == 'arm64' && inputs.release_windows_arm64)
     runs-on: windows-latest
     needs: [build-windows]
     strategy:
@@ -152,17 +204,37 @@ jobs:
         arch: [x86_64, x86, arm64]
     steps:
       - uses: actions/checkout@v4
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
 
       - name: Download Windows Artifacts
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist
 
       - name: Install NSIS
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
         run: choco install nsis.portable
 
       - name: Build NSIS Installer
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
         run: |
           mkdir dist\nsis
           copy package\windows\* dist\nsis\
@@ -171,16 +243,17 @@ jobs:
           move dist\nsis\installer.exe dist\Impactor-windows-${{ matrix.arch }}-setup.exe
 
       - name: Upload Installer
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
+          (matrix.arch == 'x86' && inputs.release_windows_x86) ||
+          (matrix.arch == 'arm64' && inputs.release_windows_arm64)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-${{ matrix.arch }}
           path: dist/Impactor-windows-${{ matrix.arch }}-setup.exe
 
   build-macos-slices:
-    if: >
-      github.event_name != 'workflow_dispatch' ||
-      (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
-      (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -195,15 +268,33 @@ jobs:
             osxcross_prefix: x86_64-apple-darwin21.4
     steps:
       - uses: actions/checkout@v4
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
+          (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
+
       - uses: dtolnay/rust-toolchain@stable
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
+          (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
         with:
           targets: ${{ matrix.target }}
+
       - name: Setup osxcross
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
+          (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
         uses: Timmmm/setup-osxcross@v3
         with:
           osx-version: "12.3"
 
       - name: Build binaries (${{ matrix.arch }})
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
+          (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
         run: |
           target_env=$(echo "${{ matrix.target }}" | tr '-' '_')
           target_env_upper=$(echo "${target_env}" | tr '[:lower:]' '[:upper:]')
@@ -242,6 +333,10 @@ jobs:
           cp target/${{ matrix.target }}/release/plumesign dist/plumesign-macos-${{ matrix.suffix }}
 
       - name: Upload ${{ matrix.arch }} Slice
+        if: >
+          github.event_name != 'workflow_dispatch' ||
+          (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
+          (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-${{ matrix.arch }}
