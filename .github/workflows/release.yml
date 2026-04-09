@@ -342,6 +342,72 @@ jobs:
           name: ${{ env.BINARY_NAME }}-macos-slice-${{ matrix.arch }}
           path: dist/*
 
+  build-macos-arm64-bundle:
+    if: github.event_name != 'workflow_dispatch' || inputs.release_macos_arm64
+    runs-on: macos-latest
+    needs: [build-macos-slices]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get ARM Slice
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-macos-slice-arm
+          path: dist/slices
+
+      - name: Setup Certificates
+        uses: apple-actions/import-codesign-certs@v5
+        with:
+          p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
+          p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
+
+      - name: Download CreateDMG
+        run: |
+          brew install create-dmg
+
+      - name: Create ARM64 Binary
+        run: |
+          cp dist/slices/${{ env.BINARY_NAME }}-macos-arm64 dist/${{ env.BINARY_NAME }}-macos-arm64
+          cp dist/slices/${{ env.BINARY_NAME_CLI }}-macos-arm64 dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
+
+      - name: Create ARM64 App Bundle
+        run: |
+          make macos BIN=dist/slices/${{ env.BINARY_NAME }}-macos-arm64 BUNDLE=1 ARCH=arm64
+
+      - name: Codesign ARM64 App
+        run: |
+          mkdir -p dist/dmg-arm64
+          mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg-arm64/
+          codesign --deep --force --options runtime \
+            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/dmg-arm64/${{ env.BUNDLE_NAME }}.app
+
+      - name: Create ARM64 DMG
+        run: |
+          create-dmg \
+            --volname ${{ env.BUNDLE_NAME }} \
+            --background "package/macos/background.png" \
+            --window-pos 200 120 \
+            --window-size 510 350 \
+            --icon-size 100 \
+            --icon ${{ env.BUNDLE_NAME }}.app 160 155 \
+            --hide-extension "${{ env.BUNDLE_NAME }}.app" \
+            --app-drop-link 350 155 \
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg dist/dmg-arm64
+
+      - name: Notarize ARM64 DMG
+        run: |
+          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
+
+      - name: Upload ARM64 macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-macos-arm64-bundle
+          path: |
+            dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
+            dist/${{ env.BINARY_NAME }}-macos-arm64
+            dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
+
   build-macos-universal:
     if: github.event_name != 'workflow_dispatch' || inputs.release_macos_universal
     runs-on: macos-latest
@@ -385,7 +451,6 @@ jobs:
 
       - name: Create DMG
         run: |
-          mkdir -p dist/out
           create-dmg \
             --volname ${{ env.BUNDLE_NAME }} \
             --background "package/macos/background.png" \
@@ -402,12 +467,13 @@ jobs:
           xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
           xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg
 
-      - name: Upload Universal DMG
+      - name: Upload Universal macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-macos-universal
           path: |
             dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg
+            dist/${{ env.BINARY_NAME }}-macos-universal
             dist/${{ env.BINARY_NAME_CLI }}-macos-universal
 
   release:
@@ -422,7 +488,12 @@ jobs:
       inputs.release_macos_x86_64 ||
       inputs.release_macos_arm64
     runs-on: ubuntu-24.04
-    needs: [build-linux, build-windows-installer, build-macos-universal, build-macos-slices]
+    needs:
+      - build-linux
+      - build-windows-installer
+      - build-macos-slices
+      - build-macos-arm64-bundle
+      - build-macos-universal
     steps:
       - uses: actions/checkout@v4
 
@@ -489,11 +560,11 @@ jobs:
           name: ${{ env.BINARY_NAME }}-macos-universal
           path: prepare/
 
-      - name: Download macOS ARM64 Slice Artifact
+      - name: Download macOS ARM64 Bundle Artifact
         if: github.event_name != 'workflow_dispatch' || inputs.release_macos_arm64
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.BINARY_NAME }}-macos-slice-arm
+          name: ${{ env.BINARY_NAME }}-macos-arm64-bundle
           path: prepare/
 
       - name: Download macOS x86_64 Slice Artifact
@@ -515,6 +586,7 @@ jobs:
           for f in prepare/**/*.exe; do cp "$f" upload/; done
           for f in prepare/**/plumesign*; do cp "$f" upload/; done
 
+          for f in prepare/**/plumeimpactor-macos-universal; do cp "$f" upload/; done
           for f in prepare/**/plumeimpactor-macos-arm64; do cp "$f" upload/; done
           for f in prepare/**/plumeimpactor-macos-x86_64; do cp "$f" upload/; done
           for f in prepare/**/plumesign-macos-arm64; do cp "$f" upload/; done
