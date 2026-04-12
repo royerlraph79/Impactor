@@ -37,6 +37,7 @@ on:
         default: true
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   BINARY_NAME: plumeimpactor
   BINARY_NAME_CLI: plumesign
   BUNDLE_NAME: Impactor
