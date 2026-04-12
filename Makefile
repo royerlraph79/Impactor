@@ -1,10 +1,11 @@
 ID := dev.khcrysalis.PlumeImpactor
+
 ifeq ($(OS),Windows_NT)
 OS := windows
 # TODO: i don't know how to get this on windows
 ARCH ?= x86_64
 else
-ARCH = $(shell uname -m)
+ARCH ?= $(shell uname -m)
 ifeq ($(shell uname -s),Linux)
 OS := linux
 endif
@@ -12,6 +13,7 @@ ifeq ($(shell uname -s),Darwin)
 OS := macos
 endif
 endif
+
 PROFILE ?= debug
 PREFIX ?= /usr/local
 SUFFIX ?= $(OS)-$(ARCH)
@@ -36,6 +38,14 @@ FLATPAK_BUNDLE_REPO ?= ~/.local/share/flatpak/repo
 FLATPAK_BUNDLE_FILENAME ?= Impactor-$(SUFFIX).flatpak
 FLATPAK_BUNDLE_NAME ?= $(ID)
 
+ifeq ($(PROFILE),release)
+CARGO_PROFILE_FLAG := --release
+CARGO_TARGET_SUBDIR := release
+else
+CARGO_PROFILE_FLAG :=
+CARGO_TARGET_SUBDIR := debug
+endif
+
 clean:
 	@rm -rf ./dist
 	@rm -rf ./build
@@ -45,9 +55,9 @@ clean:
 macos:
 	@mkdir -p dist
 ifeq ($(and $(BIN1),$(BIN2)),)
-	@cargo build --bins --workspace --$(PROFILE)
-	@cp target/$(PROFILE)/plumeimpactor dist/plumeimpactor-$(SUFFIX)
-	@cp target/$(PROFILE)/plumesign dist/plumesign-$(SUFFIX)
+	@cargo build --bins --workspace $(CARGO_PROFILE_FLAG)
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumeimpactor dist/plumeimpactor-$(SUFFIX)
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumesign dist/plumesign-$(SUFFIX)
 else
 	@name=$$(basename $(BIN1)); \
 	name=$${name%-$(OS)-*}; \
@@ -55,7 +65,16 @@ else
 endif
 ifeq ($(BUNDLE),1)
 	@cp -R package/macos/Impactor.app dist/Impactor.app
-	@vtool -arch x86_64 -arch arm64 -set-build-version 1 10.12 26.0 -output dist/plumeimpactor-$(SUFFIX) dist/plumeimpactor-$(SUFFIX)
+ifeq ($(ARCH),universal)
+	@vtool -arch x86_64 -set-build-version 1 10.12 26.0 -replace -output dist/plumeimpactor-$(SUFFIX) dist/plumeimpactor-$(SUFFIX)
+	@vtool -arch arm64  -set-build-version 1 11.0  26.0 -replace -output dist/plumeimpactor-$(SUFFIX) dist/plumeimpactor-$(SUFFIX)
+else ifeq ($(ARCH),arm64)
+	@vtool -arch arm64 -set-build-version 1 11.0 26.0 -replace -output dist/plumeimpactor-$(SUFFIX) dist/plumeimpactor-$(SUFFIX)
+else ifeq ($(ARCH),aarch64)
+	@vtool -arch arm64 -set-build-version 1 11.0 26.0 -replace -output dist/plumeimpactor-$(SUFFIX) dist/plumeimpactor-$(SUFFIX)
+else ifeq ($(ARCH),x86_64)
+	@vtool -arch x86_64 -set-build-version 1 10.12 26.0 -replace -output dist/plumeimpactor-$(SUFFIX) dist/plumeimpactor-$(SUFFIX)
+endif
 	@cp dist/plumeimpactor-$(SUFFIX) dist/Impactor.app/Contents/MacOS/Impactor
 	@chmod +x dist/Impactor.app/Contents/MacOS/Impactor
 	@strip dist/Impactor.app/Contents/MacOS/Impactor
@@ -86,15 +105,15 @@ endif
 	@cp package/linux/$(FLATPAK_BUNDLE_FILENAME) ./dist/$(FLATPAK_BUNDLE_FILENAME)
 	@rm package/linux/$(FLATPAK_BUNDLE_FILENAME)
 endif
-	@cargo build --bins --workspace --$(PROFILE)
+	@cargo build --bins --workspace $(CARGO_PROFILE_FLAG)
 	@mkdir -p dist
-	@cp target/$(PROFILE)/plumeimpactor ./dist/Impactor-$(SUFFIX)
-	@cp target/$(PROFILE)/plumesign ./dist/plumesign-$(SUFFIX)
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumeimpactor ./dist/Impactor-$(SUFFIX)
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumesign ./dist/plumesign-$(SUFFIX)
 	@strip dist/Impactor-$(SUFFIX)
 ifeq ($(APPIMAGE),1)
 	@wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$(ARCH).AppImage -O /tmp/linuxdeploy.appimage
 	@chmod +x /tmp/linuxdeploy.appimage
-	@make install PREFIX=$(APPIMAGE_APPDIR)/usr
+	@make install PREFIX=$(APPIMAGE_APPDIR)/usr PROFILE=$(PROFILE)
 	@lib_args=""; \
 		for lib in \
 			libayatana-appindicator3.so.1 \
@@ -120,7 +139,7 @@ ifeq ($(APPIMAGE),1)
 		NO_STRIP=true \
 		/tmp/linuxdeploy.appimage --appimage-extract-and-run \
 			--appdir $(APPIMAGE_APPDIR) \
-			--executable target/$(PROFILE)/plumeimpactor \
+			--executable target/$(CARGO_TARGET_SUBDIR)/plumeimpactor \
 			--desktop-file package/linux/$(ID).desktop \
 			--exclude-library='libglib-2.0.so*' \
 			--exclude-library='libgobject-2.0.so*' \
@@ -139,13 +158,13 @@ ifeq ($(APPIMAGE),1)
 endif
 
 windows:
-	@cargo build --bins --workspace --$(PROFILE)
+	@cargo build --bins --workspace $(CARGO_PROFILE_FLAG)
 	@mkdir -p dist
 	@mkdir -p dist/nsis
-	@cp target/$(PROFILE)/plumesign.exe dist/plumesign-$(SUFFIX).exe
-	@cp target/$(PROFILE)/plumeimpactor.exe dist/Impactor-$(SUFFIX)-portable.exe
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumesign.exe dist/plumesign-$(SUFFIX).exe
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumeimpactor.exe dist/Impactor-$(SUFFIX)-portable.exe
 ifeq ($(NSIS),1)
-	@cp target/$(PROFILE)/plumeimpactor.exe dist/nsis/
+	@cp target/$(CARGO_TARGET_SUBDIR)/plumeimpactor.exe dist/nsis/
 	@cp -r package/windows/* dist/nsis/
 	@makensis dist/nsis/installer.nsi
 	@mv dist/nsis/installer.exe dist/Impactor-$(SUFFIX)-setup.exe
@@ -154,8 +173,8 @@ endif
 install:
 ifeq ($(OS),linux)
 ifneq ($(PREFIX),$(APPIMAGE_APPDIR)/usr)
-	@install -Dm755 target/$(PROFILE)/plumesign $(PREFIX)/bin/plumesign
-	@install -Dm755 target/$(PROFILE)/plumeimpactor $(PREFIX)/bin/plumeimpactor
+	@install -Dm755 target/$(CARGO_TARGET_SUBDIR)/plumesign $(PREFIX)/bin/plumesign
+	@install -Dm755 target/$(CARGO_TARGET_SUBDIR)/plumeimpactor $(PREFIX)/bin/plumeimpactor
 endif
 	@install -Dm644 package/linux/$(ID).desktop $(PREFIX)/share/applications/$(ID).desktop
 	@install -Dm644 package/linux/$(ID).metainfo.xml $(PREFIX)/share/metainfo/$(ID).metainfo.xml
@@ -167,6 +186,6 @@ endif
 	@install -Dm644 package/linux/icons/hicolor/256x256/apps/$(ID).png $(PREFIX)/share/icons/hicolor/256x256/apps/$(ID).png
 	@install -Dm644 package/linux/icons/hicolor/512x512/apps/$(ID).png $(PREFIX)/share/icons/hicolor/512x512/apps/$(ID).png
 endif
-ifeq ($(OS),darwin)
+ifeq ($(OS),macos)
 	@cp -r ./dist/Impactor.app $(PREFIX)/Impactor.app
 endif
