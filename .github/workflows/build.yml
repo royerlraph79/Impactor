@@ -37,6 +37,7 @@ on:
         default: true
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   BINARY_NAME: plumeimpactor
   BINARY_NAME_CLI: plumesign
   BUNDLE_NAME: Impactor
@@ -52,8 +53,9 @@ jobs:
             arch: x86_64
           - os: ubuntu-24.04-arm
             arch: aarch64
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: >
           (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
           (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
@@ -101,7 +103,7 @@ jobs:
         if: >
           (matrix.arch == 'x86_64' && inputs.release_linux_x86_64) ||
           (matrix.arch == 'aarch64' && inputs.release_linux_aarch64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BINARY_NAME }}-linux-${{ matrix.arch }}
           path: dist/*
@@ -120,8 +122,9 @@ jobs:
           - target: aarch64-pc-windows-msvc
             arch: arm64
             runner: windows-11-arm
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: >
           (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
           (matrix.arch == 'x86' && inputs.release_windows_x86) ||
@@ -174,7 +177,7 @@ jobs:
           (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
           (matrix.arch == 'x86' && inputs.release_windows_x86) ||
           (matrix.arch == 'arm64' && inputs.release_windows_arm64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist/*.exe
@@ -185,8 +188,9 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, x86, arm64]
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: >
           (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
           (matrix.arch == 'x86' && inputs.release_windows_x86) ||
@@ -197,7 +201,7 @@ jobs:
           (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
           (matrix.arch == 'x86' && inputs.release_windows_x86) ||
           (matrix.arch == 'arm64' && inputs.release_windows_arm64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-windows-${{ matrix.arch }}
           path: dist
@@ -226,7 +230,7 @@ jobs:
           (matrix.arch == 'x86_64' && inputs.release_windows_x86_64) ||
           (matrix.arch == 'x86' && inputs.release_windows_x86) ||
           (matrix.arch == 'arm64' && inputs.release_windows_arm64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BINARY_NAME }}-windows-installer-${{ matrix.arch }}
           path: dist/Impactor-windows-${{ matrix.arch }}-setup.exe
@@ -244,8 +248,9 @@ jobs:
             arch: intel
             suffix: x86_64
             osxcross_prefix: x86_64-apple-darwin21.4
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: >
           (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
           (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
@@ -310,7 +315,7 @@ jobs:
         if: >
           (matrix.arch == 'arm' && (inputs.release_macos_arm64 || inputs.release_macos_universal)) ||
           (matrix.arch == 'intel' && (inputs.release_macos_x86_64 || inputs.release_macos_universal))
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-${{ matrix.arch }}
           path: dist/*
@@ -319,17 +324,18 @@ jobs:
     if: inputs.release_macos_arm64
     runs-on: macos-latest
     needs: [build-macos-slices]
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get ARM Slice
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-arm
           path: dist/slices
 
       - name: Setup Certificates
-        uses: apple-actions/import-codesign-certs@v5
+        uses: apple-actions/import-codesign-certs@v6
         with:
           p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
           p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
@@ -353,28 +359,33 @@ jobs:
           mkdir -p dist/dmg-arm64
           mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg-arm64/
           codesign --deep --force --options runtime \
-            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/dmg-arm64/${{ env.BUNDLE_NAME }}.app
+            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
+            dist/dmg-arm64/${{ env.BUNDLE_NAME }}.app
 
       - name: Create ARM64 DMG
         run: |
           create-dmg \
-            --volname ${{ env.BUNDLE_NAME }} \
+            --volname "${{ env.BUNDLE_NAME }}" \
             --background "package/macos/background.png" \
             --window-pos 200 120 \
             --window-size 510 350 \
             --icon-size 100 \
-            --icon ${{ env.BUNDLE_NAME }}.app 160 155 \
+            --icon "${{ env.BUNDLE_NAME }}.app" 160 155 \
             --hide-extension "${{ env.BUNDLE_NAME }}.app" \
             --app-drop-link 350 155 \
             dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg dist/dmg-arm64
 
       - name: Notarize ARM64 DMG
         run: |
-          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg \
+            --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_ID_TEAM }}" \
+            --wait
           xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
 
       - name: Upload ARM64 macOS Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BINARY_NAME }}-macos-arm64-bundle
           path: |
@@ -386,23 +397,24 @@ jobs:
     if: inputs.release_macos_universal
     runs-on: macos-latest
     needs: [build-macos-slices]
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get ARM Slice
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-arm
           path: dist/slices
 
       - name: Get Intel Slice
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.BINARY_NAME }}-macos-slice-intel
           path: dist/slices
 
       - name: Setup Certificates
-        uses: apple-actions/import-codesign-certs@v5
+        uses: apple-actions/import-codesign-certs@v6
         with:
           p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
           p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
@@ -421,28 +433,33 @@ jobs:
           mkdir -p dist/dmg
           mv dist/${{ env.BUNDLE_NAME }}.app dist/dmg/
           codesign --deep --force --options runtime \
-            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" dist/dmg/${{ env.BUNDLE_NAME }}.app
+            --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
+            dist/dmg/${{ env.BUNDLE_NAME }}.app
 
       - name: Create DMG
         run: |
           create-dmg \
-            --volname ${{ env.BUNDLE_NAME }} \
+            --volname "${{ env.BUNDLE_NAME }}" \
             --background "package/macos/background.png" \
             --window-pos 200 120 \
             --window-size 510 350 \
             --icon-size 100 \
-            --icon ${{ env.BUNDLE_NAME }}.app 160 155 \
+            --icon "${{ env.BUNDLE_NAME }}.app" 160 155 \
             --hide-extension "${{ env.BUNDLE_NAME }}.app" \
             --app-drop-link 350 155 \
             dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg dist/dmg
 
       - name: Notarize DMG
         run: |
-          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg --apple-id "${{ secrets.APPLE_ID_EMAIL }}" --password "${{ secrets.APPLE_ID_PASSWORD }}" --team-id "${{ secrets.APPLE_ID_TEAM }}" --wait
+          xcrun notarytool submit dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg \
+            --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_ID_TEAM }}" \
+            --wait
           xcrun stapler staple dist/${{ env.BUNDLE_NAME }}-macos-universal.dmg
 
       - name: Upload Universal macOS Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BINARY_NAME }}-macos-universal
           path: |
