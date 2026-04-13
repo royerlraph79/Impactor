@@ -401,7 +401,6 @@ jobs:
           name: ${{ env.BINARY_NAME }}-macos-arm64-bundle
           path: |
             dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg
-            dist/${{ env.BINARY_NAME }}-macos-arm64
             dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
 
   build-macos-universal:
@@ -583,7 +582,6 @@ jobs:
           for f in prepare/**/plumesign*; do cp "$f" upload/; done
 
           for f in prepare/**/plumeimpactor-macos-universal; do cp "$f" upload/; done
-          for f in prepare/**/plumeimpactor-macos-arm64; do cp "$f" upload/; done
           for f in prepare/**/plumeimpactor-macos-x86_64; do cp "$f" upload/; done
           for f in prepare/**/plumesign-macos-arm64; do cp "$f" upload/; done
           for f in prepare/**/plumesign-macos-x86_64; do cp "$f" upload/; done
