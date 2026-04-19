@@ -1,4 +1,4 @@
-# <img src="https://github.com/user-attachments/assets/18f2eff4-546f-4365-98eb-afb19b13dc13" width="25" height="25" /> Impactor
+# Impactor
 
 [![GitHub Release](https://img.shields.io/github/v/release/claration/Impactor?include_prereleases)](https://github.com/claration/Impactor/releases)
 [![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/claration/Impactor/total)](https://github.com/claration/Impactor/releases)
