@@ -16,7 +16,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Update metainfo
-        run: ./update_meta.sh
+        run: |
+          sudo apt update
+          sudo apt install libxml2-utils
+          ./update_meta.sh
 
       - name: Commit and merge in changes
         run: |
