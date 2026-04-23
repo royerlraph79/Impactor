@@ -11,8 +11,8 @@ members = [
 
 [workspace.package]
 edition = "2024"
-version = "2.2.3"
-authors = ["CLARATION <claration@riseup.net>"]
+version = "2.3.0"
+authors = ["C <claration@riseup.net>"]
 license = "MIT"
 repository = "https://github.com/claration/Impactor"
 

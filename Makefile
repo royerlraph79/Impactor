@@ -177,7 +177,6 @@ ifneq ($(PREFIX),$(APPIMAGE_APPDIR)/usr)
 	@install -Dm755 target/$(CARGO_TARGET_SUBDIR)/plumeimpactor $(PREFIX)/bin/plumeimpactor
 endif
 	@install -Dm644 package/linux/$(ID).desktop $(PREFIX)/share/applications/$(ID).desktop
-	@install -Dm644 package/linux/$(ID).metainfo.xml $(PREFIX)/share/metainfo/$(ID).metainfo.xml
 	@install -Dm644 package/linux/icons/hicolor/16x16/apps/$(ID).png $(PREFIX)/share/icons/hicolor/16x16/apps/$(ID).png
 	@install -Dm644 package/linux/icons/hicolor/32x32/apps/$(ID).png $(PREFIX)/share/icons/hicolor/32x32/apps/$(ID).png
 	@install -Dm644 package/linux/icons/hicolor/48x48/apps/$(ID).png $(PREFIX)/share/icons/hicolor/48x48/apps/$(ID).png
