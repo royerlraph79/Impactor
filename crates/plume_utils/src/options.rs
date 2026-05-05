@@ -168,6 +168,7 @@ pub enum SignerApp {
     ByeTunes,
     StikStore,
     Reynard,
+    Ksign,
 }
 
 impl std::fmt::Display for SignerApp {
@@ -187,6 +188,7 @@ impl std::fmt::Display for SignerApp {
             ByeTunes => "ByeTunes",
             StikStore => "StikStore",
             Reynard => "Reynard",
+            Ksign => "Ksign",
         };
         write!(f, "{}", name)
     }
@@ -213,6 +215,7 @@ impl SignerApp {
             ("me.stik.store", SignerApp::StikStore),
             ("app.stik.store", SignerApp::StikStore),
             ("com.minh-ton.Reynard", SignerApp::Reynard),
+            ("nya.asami.ksign", SignerApp::Ksign),
         ];
 
         for &(known_id, app) in KNOWN_APPS {
@@ -257,6 +260,7 @@ impl SignerApp {
             ("byetunes", SignerApp::ByeTunes),
             ("stikstore", SignerApp::StikStore),
             ("reynard", SignerApp::Reynard),
+            ("ksign", SignerApp::Ksign),
         ];
 
         for &(needle, app) in KNOWN_APP_NAMES {
@@ -282,7 +286,7 @@ impl SignerApp {
         use SignerApp::*;
         match self {
             Antrag | Feather | Protokolle | StikDebug | SparseBox | EnsWilde | StikStore
-            | Reynard => Some("/Documents/pairingFile.plist"),
+            | Reynard | Ksign => Some("/Documents/pairingFile.plist"),
             SideStore => Some("/Documents/ALTPairingFile.mobiledevicepairing"),
             LiveContainerAndSideStore | LiveContainer => {
                 Some("/Documents/SideStore/Documents/ALTPairingFile.mobiledevicepairing")
