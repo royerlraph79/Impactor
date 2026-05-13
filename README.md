@@ -101,7 +101,7 @@ To properly contribute and test potentially test localizations, you can head ove
 
 | Thanks to all my [sponsors](https://github.com/sponsors/claration)!! |
 |:-:|
-| <img src="https://raw.githubusercontent.com/claration/github-sponsor-graph/main/graph.png"> |
+| <img src="https://sponsors.claration.dev/sponsors.png"> |
 | _**"samara is cute" - Vendicated**_ |
 
 ## Star History
