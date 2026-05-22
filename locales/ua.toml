@@ -47,6 +47,8 @@ settings_launch_on_startup = "Запускати під час старту си
 settings_export_p12 = "Експортувати P12"
 settings_select_teams = "Обрати команду..."
 settings_loading_teams = "Завантаження команд..."
+settings_language = "Language:"
+settings_system_language = "System"
 
 utilities_loading = "Завантаження..."
 utilities_refresh_installed_apps = "Оновити список встановлених програм"

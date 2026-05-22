@@ -47,6 +47,8 @@ settings_launch_on_startup = "التشغيل عند بدء النظام"
 settings_export_p12 = "تصدير P12"
 settings_select_teams = "اختر فريقًا..."
 settings_loading_teams = "جارٍ تحميل الفِرَق..."
+settings_language = "اللغة:"
+settings_system_language = "النظام"
 
 utilities_loading = "جارٍ التحميل..."
 utilities_refresh_installed_apps = "تحديث التطبيقات المثبتة"

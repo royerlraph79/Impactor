@@ -93,6 +93,7 @@ pub struct Impactor {
     login_windows: std::collections::HashMap<window::Id, login_window::LoginWindow>,
     pending_installation: bool,
     certificate_reset_queue: VecDeque<crate::certificate_reset::ConfirmationRequest>,
+    selected_locale: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,6 +118,10 @@ impl Impactor {
         let mut tray = ImpactorTray::new();
         let store = Self::init_account_store_sync();
         tray.update_refresh_apps(&store);
+        let selected_locale = store.locale().map(str::to_string);
+        if let Some(code) = &selected_locale {
+            rust_i18n::set_locale(code);
+        }
         let start_in_tray = crate::startup::start_in_tray_from_args();
         let (main_window, open_task) = if start_in_tray {
             (None, Task::none())
@@ -139,6 +144,7 @@ impl Impactor {
                 login_windows: std::collections::HashMap::new(),
                 pending_installation: false,
                 certificate_reset_queue: VecDeque::new(),
+                selected_locale,
             },
             open_task,
         )
@@ -572,6 +578,20 @@ impl Impactor {
                             }
                             screen.update(msg).map(Message::SettingsScreen)
                         }
+                        settings::Message::SelectLocale(choice) => {
+                            self.selected_locale = choice.clone();
+                            let effective = choice
+                                .clone()
+                                .or_else(|| current_locale::current_locale().ok())
+                                .unwrap_or_else(|| "en".to_string());
+                            rust_i18n::set_locale(&effective);
+                            if let Some(store) = &mut self.account_store {
+                                if let Err(err) = store.set_locale_sync(choice) {
+                                    log::error!("Failed to persist locale: {err}");
+                                }
+                            }
+                            Task::none()
+                        }
                         _ => screen.update(msg).map(Message::SettingsScreen),
                     }
                 } else {
@@ -835,7 +855,7 @@ impl Impactor {
             ImpactorScreen::Main(screen) => screen.view().map(Message::MainScreen),
             ImpactorScreen::Utilities(screen) => screen.view().map(Message::UtilitiesScreen),
             ImpactorScreen::Settings(screen) => screen
-                .view(&self.account_store)
+                .view(&self.account_store, &self.selected_locale)
                 .map(Message::SettingsScreen),
             ImpactorScreen::Installer(screen) => {
                 screen.view(has_device).map(Message::InstallerScreen)

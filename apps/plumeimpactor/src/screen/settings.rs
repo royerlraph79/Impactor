@@ -29,6 +29,38 @@ pub enum Message {
     FetchTeams(String),
     TeamsLoaded(String, Vec<Team>),
     ToggleAutoStart(bool),
+    SelectLocale(Option<String>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocaleChoice {
+    code: Option<String>,
+}
+
+impl LocaleChoice {
+    fn system() -> Self {
+        Self { code: None }
+    }
+
+    fn explicit(code: String) -> Self {
+        Self { code: Some(code) }
+    }
+
+    fn code(&self) -> Option<&str> {
+        self.code.as_deref()
+    }
+}
+
+impl std::fmt::Display for LocaleChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.code {
+            None => write!(f, "{}", rust_i18n::t!("settings_system_language")),
+            Some(code) => {
+                let name = rust_i18n::t!("_language_name", locale = code);
+                write!(f, "{}", name)
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -58,11 +90,16 @@ impl SettingsScreen {
             }
             Message::ToggleAutoStart(_) => Task::none(),
             Message::SelectTeam(_, _) => Task::none(),
+            Message::SelectLocale(_) => Task::none(),
             _ => Task::none(),
         }
     }
 
-    pub fn view<'a>(&'a self, account_store: &'a Option<AccountStore>) -> Element<'a, Message> {
+    pub fn view<'a>(
+        &'a self,
+        account_store: &'a Option<AccountStore>,
+        selected_locale: &'a Option<String>,
+    ) -> Element<'a, Message> {
         let Some(store) = account_store else {
             return column![text(t!("settings_loading_accounts"))]
                 .spacing(appearance::THEME_PADDING)
@@ -156,6 +193,7 @@ impl SettingsScreen {
 
         let auto_start_enabled = crate::startup::auto_start_enabled();
         content = content.push(self.view_auto_start_toggle(auto_start_enabled));
+        content = content.push(self.view_language_picker(selected_locale));
         content = content.push(self.view_account_buttons(selected_index));
 
         content.into()
@@ -165,6 +203,35 @@ impl SettingsScreen {
         checkbox(auto_start_enabled)
             .label(t!("settings_launch_on_startup"))
             .on_toggle(Message::ToggleAutoStart)
+            .into()
+    }
+
+    fn view_language_picker<'a>(
+        &'a self,
+        selected_locale: &'a Option<String>,
+    ) -> Element<'a, Message> {
+        let mut codes: Vec<String> = rust_i18n::available_locales!()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+        codes.sort();
+
+        let mut choices: Vec<LocaleChoice> = Vec::with_capacity(codes.len() + 1);
+        choices.push(LocaleChoice::system());
+        choices.extend(codes.into_iter().map(LocaleChoice::explicit));
+
+        let current = match selected_locale {
+            None => LocaleChoice::system(),
+            Some(code) => LocaleChoice::explicit(code.clone()),
+        };
+
+        let picker = pick_list(choices, Some(current), |choice: LocaleChoice| {
+            Message::SelectLocale(choice.code().map(|s| s.to_string()))
+        })
+        .style(appearance::s_pick_list);
+
+        column![text(t!("settings_language")), picker]
+            .spacing(appearance::THEME_PADDING)
             .into()
     }
 

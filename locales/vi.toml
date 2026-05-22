@@ -47,6 +47,8 @@ settings_launch_on_startup = "Khởi động cùng hệ điều hành"
 settings_export_p12 = "Xuất chứng chỉ P12"
 settings_select_teams = "Chọn nhóm..."
 settings_loading_teams = "Đang tải danh sách nhóm..."
+settings_language = "Language:"
+settings_system_language = "System"
 
 utilities_loading = "Đang tải công cụ..."
 utilities_refresh_installed_apps = "Làm mới các ứng dụng đã cài đặt"

@@ -47,6 +47,8 @@ settings_launch_on_startup = "Avaa käynnistyksen yhteydessä"
 settings_export_p12 = "Ulosvie P12"
 settings_select_teams = "Valitse tiimi..."
 settings_loading_teams = "Ladataan tiimejä..."
+settings_language = "Language:"
+settings_system_language = "System"
 
 utilities_loading = "Ladataan..."
 utilities_refresh_installed_apps = "Päivitä Asennetut Sovellukset"

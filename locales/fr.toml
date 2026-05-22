@@ -47,6 +47,8 @@ settings_launch_on_startup = "Lancer au démarrage"
 settings_export_p12 = "Exporter P12"
 settings_select_teams = "Choisir une équipe..."
 settings_loading_teams = "Chargement des équipes..."
+settings_language = "Language:"
+settings_system_language = "System"
 
 utilities_loading = "Chargement..."
 utilities_refresh_installed_apps = "Actualiser les apps installées"
