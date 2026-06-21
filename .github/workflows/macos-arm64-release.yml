@@ -46,8 +46,28 @@ jobs:
           p12-file-base64: ${{ secrets.DEV_ID_P12_BASE64 }}
           p12-password: ${{ secrets.DEV_ID_P12_PASSWORD }}
 
+      - name: Trust preinstalled Homebrew taps
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # GitHub macOS runners may already have these taps installed.
+          # Newer Homebrew versions warn unless third-party taps are trusted.
+          if brew tap | grep -qx "aws/tap"; then
+            brew trust aws/tap
+          fi
+
+          if brew tap | grep -qx "azure/bicep"; then
+            brew trust azure/bicep
+          fi
+
       - name: Install create-dmg
-        run: brew install create-dmg
+        shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          set -euo pipefail
+          brew install create-dmg
 
       - name: Build release binaries
         run: cargo build --bins --workspace --release
@@ -59,28 +79,40 @@ jobs:
 
           mkdir -p dist
 
-          cp target/release/${{ env.BINARY_NAME }} dist/${{ env.BINARY_NAME }}-macos-arm64
-          cp target/release/${{ env.BINARY_NAME_CLI }} dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
-          chmod +x dist/${{ env.BINARY_NAME }}-macos-arm64 dist/${{ env.BINARY_NAME_CLI }}-macos-arm64
+          cp "target/release/${{ env.BINARY_NAME }}" "dist/${{ env.BINARY_NAME }}-macos-arm64"
+          cp "target/release/${{ env.BINARY_NAME_CLI }}" "dist/${{ env.BINARY_NAME_CLI }}-macos-arm64"
+          chmod +x "dist/${{ env.BINARY_NAME }}-macos-arm64" "dist/${{ env.BINARY_NAME_CLI }}-macos-arm64"
 
-          rm -rf dist/${{ env.BUNDLE_NAME }}.app
-          cp -R package/macos/${{ env.BUNDLE_NAME }}.app dist/${{ env.BUNDLE_NAME }}.app
+          rm -rf "dist/${{ env.BUNDLE_NAME }}.app"
+          cp -R "package/macos/${{ env.BUNDLE_NAME }}.app" "dist/${{ env.BUNDLE_NAME }}.app"
 
-          cp dist/${{ env.BINARY_NAME }}-macos-arm64 dist/${{ env.BUNDLE_NAME }}.app/Contents/MacOS/${{ env.BUNDLE_NAME }}
-          chmod +x dist/${{ env.BUNDLE_NAME }}.app/Contents/MacOS/${{ env.BUNDLE_NAME }}
+          cp "dist/${{ env.BINARY_NAME }}-macos-arm64" "dist/${{ env.BUNDLE_NAME }}.app/Contents/MacOS/${{ env.BUNDLE_NAME }}"
+          chmod +x "dist/${{ env.BUNDLE_NAME }}.app/Contents/MacOS/${{ env.BUNDLE_NAME }}"
 
           VERSION="$(awk '/\[workspace.package\]/,/^$/' Cargo.toml | sed -nE 's/version *= *"([^"]*)".*/\1/p' | head -n1)"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "Could not determine version from Cargo.toml"
+            exit 1
+          fi
+
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "dist/${{ env.BUNDLE_NAME }}.app/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "dist/${{ env.BUNDLE_NAME }}.app/Contents/Info.plist"
 
       - name: Codesign app bundle
+        shell: bash
         run: |
+          set -euo pipefail
+
           codesign --deep --force --options runtime \
             --sign "${{ secrets.DEV_ID_IDENTITY_NAME }}" \
             "dist/${{ env.BUNDLE_NAME }}.app"
 
       - name: Create DMG
+        shell: bash
         run: |
+          set -euo pipefail
+
           rm -rf dist/dmg-root
           mkdir -p dist/dmg-root
           mv "dist/${{ env.BUNDLE_NAME }}.app" dist/dmg-root/
@@ -98,7 +130,10 @@ jobs:
             "dist/dmg-root"
 
       - name: Notarize and staple DMG
+        shell: bash
         run: |
+          set -euo pipefail
+
           xcrun notarytool submit "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg" \
             --apple-id "${{ secrets.APPLE_ID_EMAIL }}" \
             --password "${{ secrets.APPLE_ID_PASSWORD }}" \
@@ -108,7 +143,10 @@ jobs:
           xcrun stapler staple "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg"
 
       - name: Remove unwanted standalone GUI binary
-        run: rm -f "dist/${{ env.BINARY_NAME }}-macos-arm64"
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "dist/${{ env.BINARY_NAME }}-macos-arm64"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v6
@@ -137,6 +175,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           if [[ -z "${{ steps.tag.outputs.tag }}" ]]; then
             echo "tag_name is required when publish_release=true"
             exit 1
@@ -151,6 +190,7 @@ jobs:
           set -euo pipefail
 
           TAG="${{ steps.tag.outputs.tag }}"
+
           FILES=(
             "dist/${{ env.BUNDLE_NAME }}-macos-arm64.dmg"
             "dist/${{ env.BINARY_NAME_CLI }}-macos-arm64"
@@ -160,6 +200,7 @@ jobs:
             gh release upload "$TAG" "${FILES[@]}" --clobber
           else
             EXTRA_ARGS=()
+
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.draft }}" == "true" ]]; then
               EXTRA_ARGS+=(--draft)
             fi
